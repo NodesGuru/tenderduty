@@ -11,7 +11,7 @@ $ tenderduty -example-config > config.yml
 Or if using the docker image:
 
 ```
-$ docker run --rm ghcr.io/blockpane/tenderduty:latest -example-config >config.yml
+$ docker run --rm ghcr.io/gluckzhang/tenderduty:latest -example-config >config.yml
 ```
 
 * [General Settings](#general-settings)

@@ -9,7 +9,7 @@ import (
 	"syscall"
 	"time"
 
-	dash "github.com/blockpane/tenderduty/v2/td2/dashboard"
+	dash "github.com/gluckzhang/tenderduty/v2/td2/dashboard"
 )
 
 var td = &Config{}
