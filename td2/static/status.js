@@ -108,6 +108,8 @@ function updateTable(status) {
         }
         window += `<div class="uk-width-1-2">${_.escape(status.Status[i].missed)} / ${_.escape(status.Status[i].window)}</div>`
 
+        let unvotedOpenGovProposals = status.Status[i].unvoted_open_gov_proposals
+
         let nodes = `${_.escape(status.Status[i].healthy_nodes)} / ${_.escape(status.Status[i].nodes)}`
         if (status.Status[i].healthy_nodes < status.Status[i].nodes) {
             nodes = "<strong><span uk-icon='arrow-down' style='color: darkorange'></span>" + nodes + "</strong>"
@@ -130,8 +132,9 @@ function updateTable(status) {
             r.insertCell(3).innerHTML = `<div class='uk-text-truncate'>${_.escape(status.Status[i].moniker.substring(0,24))}</div>`
         }
         r.insertCell(4).innerHTML = `<div style="text-align: center">${bonded}</div>`
-        r.insertCell(5).innerHTML = `<div uk-grid>${window}</div>`
-        r.insertCell(6).innerHTML = `<div class="uk-text-center">${nodes}</div>`
+        r.insertCell(5).innerHTML = `<div style="text-align: center">${unvotedOpenGovProposals}</div>`
+        r.insertCell(6).innerHTML = `<div uk-grid>${window}</div>`
+        r.insertCell(7).innerHTML = `<div class="uk-text-center">${nodes}</div>`
     }
 }
 

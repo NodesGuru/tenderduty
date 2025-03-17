@@ -83,18 +83,19 @@ type savedState struct {
 // ChainConfig represents a validator to be monitored on a chain, it is somewhat of a misnomer since multiple
 // validators can be monitored on a single chain.
 type ChainConfig struct {
-	name           string
-	wsclient       *TmConn       // custom websocket client to work around wss:// bugs in tendermint
-	client         *rpchttp.HTTP // legit tendermint client
-	noNodes        bool          // tracks if all nodes are down
-	valInfo        *ValInfo      // recent validator state, only refreshed every few minutes
-	lastValInfo    *ValInfo      // use for detecting newly-jailed/tombstone
-	blocksResults  []int
-	lastError      string
-	lastBlockTime  time.Time
-	lastBlockAlarm bool
-	lastBlockNum   int64
-	activeAlerts   int
+	name                    string
+	wsclient                *TmConn       // custom websocket client to work around wss:// bugs in tendermint
+	client                  *rpchttp.HTTP // legit tendermint client
+	noNodes                 bool          // tracks if all nodes are down
+	valInfo                 *ValInfo      // recent validator state, only refreshed every few minutes
+	lastValInfo             *ValInfo      // use for detecting newly-jailed/tombstone
+	blocksResults           []int
+	lastError               string
+	lastBlockTime           time.Time
+	lastBlockAlarm          bool
+	lastBlockNum            int64
+	activeAlerts            int
+	unvotedOpenGovProposals int // the number of open proposals that the validator has not voted on
 
 	statTotalSigns      float64
 	statTotalProps      float64
@@ -163,13 +164,13 @@ type AlertConfig struct {
 	AlertIfNoServers bool `yaml:"alert_if_no_servers"`
 
 	// PagerdutyAlerts: Should pagerduty alerts be sent for this chain? Both 'config.pagerduty.enabled: yes' and this must be set.
-	//Deprecated: use Pagerduty.Enabled instead
+	// Deprecated: use Pagerduty.Enabled instead
 	PagerdutyAlerts bool `yaml:"pagerduty_alerts"`
 	// DiscordAlerts: Should discord alerts be sent for this chain? Both 'config.discord.enabled: yes' and this must be set.
-	//Deprecated: use Discord.Enabled instead
+	// Deprecated: use Discord.Enabled instead
 	DiscordAlerts bool `yaml:"discord_alerts"`
 	// TelegramAlerts: Should telegram alerts be sent for this chain? Both 'config.telegram.enabled: yes' and this must be set.
-	//Deprecated: use Telegram.Enabled instead
+	// Deprecated: use Telegram.Enabled instead
 	TelegramAlerts bool `yaml:"telegram_alerts"`
 
 	// chain specific overrides for alert destinations.
@@ -390,7 +391,6 @@ func loadChainConfig(yamlFile string) (*ChainConfig, error) {
 
 // loadConfig creates a new Config from a file.
 func loadConfig(yamlFile, stateFile, chainConfigDirectory string, password *string) (*Config, error) {
-
 	c := &Config{}
 	if strings.HasPrefix(yamlFile, "http://") || strings.HasPrefix(yamlFile, "https://") {
 		if *password == "" {

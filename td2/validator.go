@@ -183,10 +183,10 @@ func (cc *ChainConfig) GetValInfo(first bool) (err error) {
 		}
 	}
 
-	// Step 1: Get all proposals in voting period
+	// get all proposals in voting period
 	qProposal := gov.QueryProposalsRequest{
 		// Filter for only proposals in voting period
-    // ProposalStatus: gov.StatusVotingPeriod, // TODO: uncomment this line when the code is ready
+		ProposalStatus: gov.StatusVotingPeriod,
 	}
 	b, err := qProposal.Marshal()
 	if err == nil {
@@ -219,6 +219,7 @@ func (cc *ChainConfig) GetValInfo(first bool) (err error) {
 				}
 
 				l("🌟 unvotedProposals", cc.name, len(unvotedProposals))
+				cc.unvotedOpenGovProposals = len(unvotedProposals)
 			}
 		}
 	}
