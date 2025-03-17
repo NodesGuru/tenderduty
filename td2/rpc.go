@@ -10,7 +10,7 @@ import (
 	"regexp"
 	"time"
 
-	dash "github.com/blockpane/tenderduty/v2/td2/dashboard"
+	dash "github.com/gluckzhang/tenderduty/v2/td2/dashboard"
 	rpchttp "github.com/tendermint/tendermint/rpc/client/http"
 )
 

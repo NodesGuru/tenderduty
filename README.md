@@ -1,8 +1,8 @@
 # TenderDuty v2
 
-[![Go Reference](https://pkg.go.dev/badge/github.com/blockpane/tenderduty.svg)](https://pkg.go.dev/github.com/blockpane/tenderduty)
-[![Gosec](https://github.com/blockpane/tenderduty/workflows/Gosec/badge.svg)](https://github.com/blockpane/tenderduty/actions?query=workflow%3AGosec)
-[![CodeQL](https://github.com/blockpane/tenderduty/workflows/CodeQL/badge.svg)](https://github.com/blockpane/tenderduty/actions?query=workflow%3ACodeQL)
+[![Go Reference](https://pkg.go.dev/badge/github.com/gluckzhang/tenderduty.svg)](https://pkg.go.dev/github.com/gluckzhang/tenderduty)
+[![Gosec](https://github.com/gluckzhang/tenderduty/workflows/Gosec/badge.svg)](https://github.com/gluckzhang/tenderduty/actions?query=workflow%3AGosec)
+[![CodeQL](https://github.com/gluckzhang/tenderduty/workflows/CodeQL/badge.svg)](https://github.com/gluckzhang/tenderduty/actions?query=workflow%3ACodeQL)
 
 Tenderduty is a comprehensive monitoring tool for Tendermint chains. Its primary function is to alert a validator if they are missing blocks, and has many other features.
 
@@ -37,9 +37,9 @@ Detailed installation info is in the [installation doc.](docs/install.md)
 
 ```
 mkdir tenderduty && cd tenderduty
-docker run --rm ghcr.io/blockpane/tenderduty:latest -example-config >config.yml
+docker run --rm ghcr.io/gluckzhang/tenderduty:latest -example-config >config.yml
 # edit config.yml and add chains, notification methods etc.
-docker run -d --name tenderduty -p "8888:8888" -p "28686:28686" --restart unless-stopped -v $(pwd)/config.yml:/var/lib/tenderduty/config.yml ghcr.io/blockpane/tenderduty:latest
+docker run -d --name tenderduty -p "8888:8888" -p "28686:28686" --restart unless-stopped -v $(pwd)/config.yml:/var/lib/tenderduty/config.yml ghcr.io/gluckzhang/tenderduty:latest
 docker logs -f --tail 20 tenderduty
 ```
 

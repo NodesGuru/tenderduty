@@ -80,6 +80,19 @@ func (a *alarmCache) getCount(chain string) int {
 	return len(a.AllAlarms[chain])
 }
 
+// FindAlert checks if an alert with the given key exists for the specified chain
+func (a *alarmCache) findAlert(chain string, alertMsg string) bool {
+	if a.AllAlarms == nil || a.AllAlarms[chain] == nil {
+		return false
+	}
+
+	a.notifyMux.RLock()
+	defer a.notifyMux.RUnlock()
+
+	_, exists := a.AllAlarms[chain][alertMsg]
+	return exists
+}
+
 func (a *alarmCache) clearAll(chain string) {
 	if a.AllAlarms == nil || a.AllAlarms[chain] == nil {
 		return
@@ -604,6 +617,28 @@ func (cc *ChainConfig) watch() {
 				)
 				cc.activeAlerts = alarms.getCount(cc.name)
 			}
+		}
+
+		// there are open proposals that the validator has not voted on
+		id := cc.valInfo.Valcons + "gov_voting"
+		alertMsg := "Severity: warning\nThere are open proposal(s) that the validator has not voted on"
+		if cc.unvotedOpenGovProposals > 0 {
+			td.alert(
+				cc.name,
+				alertMsg,
+				"warning",
+				false,
+				&id,
+			)
+		} else if (cc.unvotedOpenGovProposals == 0) && alarms.findAlert(cc.name, alertMsg) {
+			td.alert(
+				cc.name,
+				alertMsg,
+				"info",
+				true,
+				&id,
+			)
+			cc.activeAlerts = alarms.getCount(cc.name)
 		}
 
 		if td.Prom {
