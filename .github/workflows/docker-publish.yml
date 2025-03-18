@@ -47,6 +47,6 @@ jobs:
           push: true
           context: .
           tags: |
-            ${{ env.DOCKER_HUB_ORG }}/{{ env.DOCKER_HUB_REPO }}:latest
-            ${{ env.DOCKER_HUB_ORG }}/{{ env.DOCKER_HUB_REPO }}:${{ github.sha }}
+            ${{ env.DOCKER_HUB_ORG }}/${{ env.DOCKER_HUB_REPO }}:latest
+            ${{ env.DOCKER_HUB_ORG }}/${{ env.DOCKER_HUB_REPO }}:${{ github.sha }}
             ${{ github.event.release.tag_name != '' && format('{0}/{1}:{2}', env.DOCKER_HUB_ORG, env.DOCKER_HUB_REPO, github.event.release.tag_name) || '' }}

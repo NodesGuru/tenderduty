@@ -3,13 +3,13 @@ name: Gosec
 on:
   push:
     branches:
-      - master
+      - main
       - release/*
       - develop
   pull_request:
     branches:
-      - master
-      - release/v2
+      - main
+      - release/*
       - develop
 jobs:
   tests:
@@ -23,3 +23,4 @@ jobs:
         uses: securego/gosec@master
         with:
           args: ./...
+
