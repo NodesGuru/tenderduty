@@ -80,6 +80,11 @@ type savedState struct {
 	NodesDown map[string]map[string]time.Time `json:"nodes_down"`
 }
 
+type AdapterConfig struct {
+	Name    string         `yaml:"name"`
+	Configs map[string]any `yaml:"configs"`
+}
+
 // ChainConfig represents a validator to be monitored on a chain, it is somewhat of a misnomer since multiple
 // validators can be monitored on a single chain.
 type ChainConfig struct {
@@ -123,9 +128,9 @@ type ChainConfig struct {
 	PublicFallback bool `yaml:"public_fallback"`
 	// Nodes defines what RPC servers to connect to.
 	Nodes []*NodeConfig `yaml:"nodes"`
-	// Adopter defines what implementation should be used for checking a chain's status
+	// Adapter defines what implementation should be used for checking a chain's status
 	// currently it supports two values: `default` or `namada`
-	Adopter string `yaml:"adopter"`
+	Adapter AdapterConfig `yaml:"adapter"`
 }
 
 // mkUpdate returns the info needed by prometheus for a gauge.
@@ -591,4 +596,8 @@ func clearStale(alarms map[string]time.Time, what string, hasPagerduty bool, hou
 		}
 		l("📂 restored %s alarm state -", what, k)
 	}
+}
+
+type ChainAdapter interface {
+	CountUnvotedOpenProposals(ctx context.Context) (int, error)
 }
