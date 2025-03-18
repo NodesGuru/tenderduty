@@ -10,7 +10,6 @@ on:
       - "**/caddy/**"
       - "**/docs/**"
       - "**.md"
-      - ".github/**"
 
 env:
   DOCKER_HUB_ORG: firstset
