@@ -80,6 +80,11 @@ type savedState struct {
 	NodesDown map[string]map[string]time.Time `json:"nodes_down"`
 }
 
+type AdapterConfig struct {
+	Name    string         `yaml:"name"`
+	Configs map[string]any `yaml:"configs"`
+}
+
 // ChainConfig represents a validator to be monitored on a chain, it is somewhat of a misnomer since multiple
 // validators can be monitored on a single chain.
 type ChainConfig struct {
@@ -123,6 +128,9 @@ type ChainConfig struct {
 	PublicFallback bool `yaml:"public_fallback"`
 	// Nodes defines what RPC servers to connect to.
 	Nodes []*NodeConfig `yaml:"nodes"`
+	// Adapter defines what implementation should be used for checking a chain's status
+	// currently it supports two values: `default` or `namada`
+	Adapter AdapterConfig `yaml:"adapter"`
 }
 
 // mkUpdate returns the info needed by prometheus for a gauge.
@@ -327,19 +335,20 @@ func validateConfig(c *Config) (fatal bool, problems []string) {
 		}
 		if td.EnableDash {
 			td.updateChan <- &dash.ChainStatus{
-				MsgType:      "status",
-				Name:         v.name,
-				ChainId:      v.ChainId,
-				Moniker:      v.valInfo.Moniker,
-				Bonded:       v.valInfo.Bonded,
-				Jailed:       v.valInfo.Jailed,
-				Tombstoned:   v.valInfo.Tombstoned,
-				Missed:       v.valInfo.Missed,
-				Window:       v.valInfo.Window,
-				Nodes:        len(v.Nodes),
-				HealthyNodes: 0,
-				ActiveAlerts: 0,
-				Blocks:       v.blocksResults,
+				MsgType:                 "status",
+				Name:                    v.name,
+				ChainId:                 v.ChainId,
+				Moniker:                 v.valInfo.Moniker,
+				Bonded:                  v.valInfo.Bonded,
+				Jailed:                  v.valInfo.Jailed,
+				Tombstoned:              v.valInfo.Tombstoned,
+				Missed:                  v.valInfo.Missed,
+				Window:                  v.valInfo.Window,
+				Nodes:                   len(v.Nodes),
+				HealthyNodes:            0,
+				ActiveAlerts:            0,
+				Blocks:                  v.blocksResults,
+				UnvotedOpenGovProposals: v.unvotedOpenGovProposals,
 			}
 		}
 	}
@@ -587,4 +596,8 @@ func clearStale(alarms map[string]time.Time, what string, hasPagerduty bool, hou
 		}
 		l("📂 restored %s alarm state -", what, k)
 	}
+}
+
+type ChainAdapter interface {
+	CountUnvotedOpenProposals(ctx context.Context) (int, error)
 }

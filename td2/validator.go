@@ -14,7 +14,6 @@ import (
 	"github.com/cosmos/cosmos-sdk/crypto/keys/ed25519"
 	"github.com/cosmos/cosmos-sdk/crypto/keys/secp256k1"
 	"github.com/cosmos/cosmos-sdk/types/bech32"
-	gov "github.com/cosmos/cosmos-sdk/x/gov/types"
 	slashing "github.com/cosmos/cosmos-sdk/x/slashing/types"
 	staking "github.com/cosmos/cosmos-sdk/x/staking/types"
 	rpchttp "github.com/tendermint/tendermint/rpc/client/http"
@@ -183,50 +182,23 @@ func (cc *ChainConfig) GetValInfo(first bool) (err error) {
 		}
 	}
 
-	// get all proposals in voting period
-	qProposal := gov.QueryProposalsRequest{
-		// Filter for only proposals in voting period
-		ProposalStatus: gov.StatusVotingPeriod,
-	}
-	b, err := qProposal.Marshal()
-	if err == nil {
-		resp, err := cc.client.ABCIQuery(ctx, "/cosmos.gov.v1.Query/Proposals", b)
-		if resp == nil || resp.Response.Value == nil {
-			l("🛑 failed to query proposals", cc.name, err)
-		} else {
-			proposals := &gov.QueryProposalsResponse{}
-			err = proposals.Unmarshal(resp.Response.Value)
-			if err == nil {
-				// Step 2: Filter out proposals the validator has already voted on
-				var unvotedProposals []gov.Proposal
-
-				for _, proposal := range proposals.Proposals {
-					// For each proposal, check if the validator has voted
-					accAddress, err := ConvertValopertToAccAddress(cc.ValAddress)
-					if err != nil {
-						l(fmt.Sprintf("⚠️ Cannot convert valoper to account address: %v", err))
-						continue
-					}
-
-					hasVoted, err := CheckIfValidatorVoted(ctx, cc, proposal.ProposalId, accAddress)
-					if err != nil {
-						l(fmt.Sprintf("⚠️ Error checking if validator voted: %v", err))
-					}
-
-					if !hasVoted {
-						unvotedProposals = append(unvotedProposals, proposal)
-					}
-				}
-
-				l("🌟 unvotedProposals", cc.name, len(unvotedProposals))
-				cc.unvotedOpenGovProposals = len(unvotedProposals)
-			}
+	var adapter ChainAdapter
+	switch cc.Adapter.Name {
+	case "namada":
+		adapter = &NamadaAdapter{
+			ChainConfig: cc,
+		}
+	default:
+		adapter = &DefaultAdapter{
+			ChainConfig: cc,
 		}
 	}
+	cc.unvotedOpenGovProposals, err = adapter.CountUnvotedOpenProposals(ctx)
+	l("🌟 found unvoted proposals", cc.name, cc.unvotedOpenGovProposals)
 
 	// get current signing information (tombstoned, missed block count)
 	qSigning := slashing.QuerySigningInfoRequest{ConsAddress: cc.valInfo.Valcons}
-	b, err = qSigning.Marshal()
+	b, err := qSigning.Marshal()
 	if err != nil {
 		return
 	}
