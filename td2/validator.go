@@ -126,6 +126,37 @@ func CheckIfValidatorVoted(ctx context.Context, cc *ChainConfig, proposalID uint
 	return false, nil
 }
 
+// GetMinSignedPerWindow The check the minimum signed threshold of the validator.
+func (cc *ChainConfig) GetMinSignedPerWindow() (err error) {
+	if cc.client == nil {
+		return errors.New("nil rpc client")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	qParams := &slashing.QueryParamsRequest{}
+	b, err := qParams.Marshal()
+	if err != nil {
+		return
+	}
+	resp, err := cc.client.ABCIQuery(ctx, "/cosmos.slashing.v1beta1.Query/Params", b)
+	if err != nil {
+		return
+	}
+	if resp.Response.Value == nil {
+		err = errors.New("🛑 could not query slashing params, got empty response")
+		return
+	}
+	params := &slashing.QueryParamsResponse{}
+	err = params.Unmarshal(resp.Response.Value)
+	if err != nil {
+		return
+	}
+
+	cc.minSignedPerWindow = params.Params.MinSignedPerWindow.MustFloat64()
+	return
+}
+
 // GetValInfo the first bool is used to determine if extra information about the validator should be printed.
 func (cc *ChainConfig) GetValInfo(first bool) (err error) {
 	if cc.client == nil {
@@ -141,10 +172,16 @@ func (cc *ChainConfig) GetValInfo(first bool) (err error) {
 	// Fetch info from /cosmos.staking.v1beta1.Query/Validator
 	// it's easier to ask people to provide valoper since it's readily available on
 	// explorers, so make it easy and lookup the consensus key for them.
-	cc.valInfo.Conspub, cc.valInfo.Moniker, cc.valInfo.Jailed, cc.valInfo.Bonded, err = getVal(ctx, cc.client, cc.ValAddress)
+	conspub, moniker, jailed, bonded, err := getVal(ctx, cc.client, cc.ValAddress)
 	if err != nil {
 		return
 	}
+
+	cc.valInfo.Conspub = conspub
+	cc.valInfo.Moniker = moniker
+	cc.valInfo.Jailed = jailed
+	cc.valInfo.Bonded = bonded
+
 	if first && cc.valInfo.Bonded {
 		l(fmt.Sprintf("⚙️ found %s (%s) in validator set", cc.ValAddress, cc.valInfo.Moniker))
 	} else if first && !cc.valInfo.Bonded {
