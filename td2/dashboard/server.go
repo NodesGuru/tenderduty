@@ -156,6 +156,6 @@ type CacheHandler struct{}
 
 func (ch CacheHandler) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 	writer.Header().Set("Cache-Control", "public, max-age=3600")
-	writer.Header().Set("X-Powered-By", "https://github.com/gluckzhang/tenderduty")
+	writer.Header().Set("X-Powered-By", "https://github.com/firstset/tenderduty")
 	http.FileServer(http.FS(rootDir)).ServeHTTP(writer, request)
 }

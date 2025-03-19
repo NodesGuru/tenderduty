@@ -17,7 +17,7 @@ import (
 	"sync"
 	"time"
 
-	dash "github.com/gluckzhang/tenderduty/v2/td2/dashboard"
+	dash "github.com/firstset/tenderduty/v2/td2/dashboard"
 	"github.com/go-yaml/yaml"
 	rpchttp "github.com/tendermint/tendermint/rpc/client/http"
 )
