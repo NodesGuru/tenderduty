@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	dash "github.com/gluckzhang/tenderduty/v2/td2/dashboard"
+	dash "github.com/firstset/tenderduty/v2/td2/dashboard"
 	"github.com/gorilla/websocket"
 	pbtypes "github.com/tendermint/tendermint/proto/tendermint/types"
 )

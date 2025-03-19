@@ -26,7 +26,7 @@ version: "2.0"
 
 services:
   td2:
-    image: ghcr.io/gluckzhang/tenderduty:feature-1657833932
+    image: firstset/tenderduty:latest
     env:
       - PASSWORD=<key-to-decrypt>
       - CONFIG=https://host.name/config.yml.asc

@@ -11,9 +11,9 @@ Contributions and corrections are welcomed here. Would be nice to add a section 
 
 ```shell
 mkdir tenderduty && cd tenderduty
-docker run --rm ghcr.io/gluckzhang/tenderduty:latest -example-config >config.yml
+docker run --rm firstset/tenderduty:latest -example-config >config.yml
 # edit config.yml and add chains, notification methods etc.
-docker run -d --name tenderduty -p "8888:8888" -p "28686:28686" --restart unless-stopped -v $(pwd)/config.yml:/var/lib/tenderduty/config.yml ghcr.io/gluckzhang/tenderduty:latest
+docker run -d --name tenderduty -p "8888:8888" -p "28686:28686" --restart unless-stopped -v $(pwd)/config.yml:/var/lib/tenderduty/config.yml firstset/tenderduty:latest
 docker logs -f --tail 20 tenderduty
 ```
 
@@ -28,7 +28,7 @@ version: '3.2'
 services:
 
   v2:
-    image: ghcr.io/gluckzhang/tenderduty:latest
+    image: firstset/tenderduty:latest
     command: ""
     ports:
       - "8888:8888" # Dashboard
@@ -49,7 +49,7 @@ volumes:
 EOF
 
 docker-compose pull
-docker run --rm ghcr.io/gluckzhang/tenderduty:latest -example-config >config.yml
+docker run --rm firstset/tenderduty:latest -example-config >config.yml
 
 # Edit the config.yml file, and then start the container
 docker-compose up -d
@@ -81,7 +81,7 @@ brew install go
 Because of design choices made by golang devs, it's not possible to use 'go install' remotely because tendermint uses replace directives in the go.mod file. It's necessary to clone the repo and build manually.
 
 ```
-git clone https://github.com/gluckzhang/tenderduty
+git clone https://github.com/firstset/tenderduty
 cd tenderduty
 cp example-config.yml config.yml
 # edit config.yml with your favorite editor
@@ -107,7 +107,7 @@ sudo -su tenderduty
 cd ~
 echo 'export PATH=$PATH:~/go/bin' >> .bashrc
 . .bashrc
-git clone https://github.com/gluckzhang/tenderduty
+git clone https://github.com/firstset/tenderduty
 cd tenderduty
 go install
 cp example-config.yml ../config.yml

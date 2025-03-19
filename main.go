@@ -9,7 +9,7 @@ import (
 	"os"
 	"syscall"
 
-	td2 "github.com/gluckzhang/tenderduty/v2/td2"
+	td2 "github.com/firstset/tenderduty/v2/td2"
 )
 
 //go:embed example-config.yml

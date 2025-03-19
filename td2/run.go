@@ -9,7 +9,7 @@ import (
 	"syscall"
 	"time"
 
-	dash "github.com/gluckzhang/tenderduty/v2/td2/dashboard"
+	dash "github.com/firstset/tenderduty/v2/td2/dashboard"
 )
 
 var td = &Config{}
@@ -125,7 +125,7 @@ func Run(configFile, stateFile, chainConfigDirectory string, password *string) e
 	}
 
 	// attempt to save state on exit, only a best-effort ...
-	saved := make(chan interface{})
+	saved := make(chan any)
 	go saveOnExit(stateFile, saved)
 
 	<-td.ctx.Done()
@@ -134,7 +134,7 @@ func Run(configFile, stateFile, chainConfigDirectory string, password *string) e
 	return err
 }
 
-func saveOnExit(stateFile string, saved chan interface{}) {
+func saveOnExit(stateFile string, saved chan any) {
 	quitting := make(chan os.Signal, 1)
 	signal.Notify(quitting, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
 
