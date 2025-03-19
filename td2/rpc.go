@@ -229,15 +229,12 @@ func (c *Config) pingHealthcheck() {
 	ticker := time.NewTicker(c.Healthcheck.PingRate * time.Second)
 
 	go func() {
-		for {
-			select {
-			case <-ticker.C:
-				_, err := http.Get(c.Healthcheck.PingURL)
-				if err != nil {
-					l(fmt.Sprintf("❌ Failed to ping healthcheck URL: %s", err.Error()))
-				} else {
-					l(fmt.Sprintf("🏓 Successfully pinged healthcheck URL: %s", c.Healthcheck.PingURL))
-				}
+		for range ticker.C {
+			_, err := http.Get(c.Healthcheck.PingURL)
+			if err != nil {
+				l(fmt.Sprintf("❌ Failed to ping healthcheck URL: %s", err.Error()))
+			} else {
+				l(fmt.Sprintf("🏓 Successfully pinged healthcheck URL: %s", c.Healthcheck.PingURL))
 			}
 		}
 	}()

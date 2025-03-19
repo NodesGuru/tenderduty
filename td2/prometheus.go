@@ -13,9 +13,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
-var (
-	promMux sync.RWMutex
-)
+var promMux sync.RWMutex
 
 type metricType uint8
 
@@ -37,6 +35,8 @@ const (
 	metricUnealthyNodes
 	metricNodeLagSeconds
 	metricNodeDownSeconds
+
+	metricUnvotedProposals
 )
 
 type promUpdate struct {
@@ -66,8 +66,8 @@ func (m metrics) setStat(update *promUpdate) {
 
 func prometheusExporter(ctx context.Context, updates chan *promUpdate) {
 	// attributes used to uniquely identify each chain
-	var chainLabels = []string{"name", "chain_id", "moniker"}
-	var hostLabels = []string{"name", "chain_id", "moniker", "endpoint"}
+	chainLabels := []string{"name", "chain_id", "moniker"}
+	hostLabels := []string{"name", "chain_id", "moniker", "endpoint"}
 
 	// setup our signing gauges
 	signed := promauto.NewGaugeVec(prometheus.GaugeOpts{
@@ -128,6 +128,10 @@ func prometheusExporter(ctx context.Context, updates chan *promUpdate) {
 		Name: "tenderduty_total_unhealthy_endpoints",
 		Help: "the count of unhealthy rpc endpoints being monitored for a chain",
 	}, chainLabels)
+	unvotedProposals := promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "tenderduty_total_unvoted_gov_proposals",
+		Help: "the count of the unvoted governance proposals that are in the voting period",
+	}, chainLabels)
 
 	// extra labels for individual node stats
 	nodeLagSec := promauto.NewGaugeVec(prometheus.GaugeOpts{
@@ -156,6 +160,7 @@ func prometheusExporter(ctx context.Context, updates chan *promUpdate) {
 		metricUnealthyNodes:            nodesUnhealthy,
 		metricNodeLagSeconds:           nodeLagSec,  // todo
 		metricNodeDownSeconds:          nodeDownSec, // todo
+		metricUnvotedProposals:         unvotedProposals,
 	}
 
 	go func() {

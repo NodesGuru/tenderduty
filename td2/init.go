@@ -3,11 +3,12 @@ package tenderduty
 import (
 	"embed"
 	"fmt"
-	dash "github.com/firstset/tenderduty/v2/td2/dashboard"
 	"log"
 	"os"
 	"strings"
 	"time"
+
+	dash "github.com/firstset/tenderduty/v2/td2/dashboard"
 )
 
 //go:embed static/*
@@ -35,7 +36,7 @@ func init() {
 	}()
 }
 
-var logs = make(chan interface{})
+var logs = make(chan any)
 
 func l(v ...any) {
 	logs <- v

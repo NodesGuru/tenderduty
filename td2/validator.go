@@ -232,6 +232,9 @@ func (cc *ChainConfig) GetValInfo(first bool) (err error) {
 	}
 	cc.unvotedOpenGovProposals, err = adapter.CountUnvotedOpenProposals(ctx)
 	l("🌟 found unvoted proposals", cc.name, cc.unvotedOpenGovProposals)
+	if td.Prom {
+		td.statsChan <- cc.mkUpdate(metricUnvotedProposals, float64(cc.unvotedOpenGovProposals), "")
+	}
 
 	// get current signing information (tombstoned, missed block count)
 	qSigning := slashing.QuerySigningInfoRequest{ConsAddress: cc.valInfo.Valcons}

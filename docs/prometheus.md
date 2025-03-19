@@ -2,9 +2,9 @@
 
 This is the list of the prometheus statistics that are exposed by tenderduty. An example Grafana dashboard is planned, but not ready. Some notes about the stats:
 
-* All metrics are gauges, because counters are reset at startup using counters is ill-advised.
-* All endpoints include the following attributes: chain_id, moniker, and name.
-* Node specifc stats include an additional attribute: endpoint, which contains the RPC node's URL.
+- All metrics are gauges, because counters are reset at startup using counters is ill-advised.
+- All endpoints include the following attributes: chain_id, moniker, and name.
+- Node specifc stats include an additional attribute: endpoint, which contains the RPC node's URL.
 
 ### tenderduty_consecutive_missed_blocks
 
@@ -83,3 +83,9 @@ The count of rpc endpoints being monitored for a chain
 The count of unhealthy rpc endpoints being monitored for a chain
 
 `tenderduty_total_unhealthy_endpoints{chain_id="chain-id",moniker="Moniker",name="Chain Name"} 0`
+
+### tenderduty_total_unvoted_gov_proposals
+
+The count of the unvoted governance proposals that are in the **voting period**
+
+`tenderduty_total_unvoted_gov_proposals{chain_id="chain-id",moniker="Moniker",name="Chain Name"} 0`
