@@ -6,10 +6,36 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
+	"github.com/cosmos/cosmos-sdk/types/bech32"
 	gov "github.com/cosmos/cosmos-sdk/x/gov/types"
 )
+
+func ConvertValopertToAccAddress(valoperAddr string) (string, error) {
+	// Check if it's a valoper address
+	if !strings.Contains(valoperAddr, "valoper") {
+		return valoperAddr, nil // Already an account address or something else
+	}
+
+	// Decode the address
+	prefix, bytes, err := bech32.DecodeAndConvert(valoperAddr)
+	if err != nil {
+		return "", fmt.Errorf("🌟 failed to decode valoper address: %w", err)
+	}
+
+	// Get the base prefix by removing "valoper"
+	basePrefix := strings.Replace(prefix, "valoper", "", 1)
+
+	// Re-encode with the base prefix
+	accAddress, err := bech32.ConvertAndEncode(basePrefix, bytes)
+	if err != nil {
+		return "", fmt.Errorf("🌟 failed to encode account address: %w", err)
+	}
+
+	return accAddress, nil
+}
 
 type DefaultAdapter struct {
 	ChainConfig *ChainConfig
