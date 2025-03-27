@@ -2,13 +2,23 @@ package tenderduty
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
+
+	cosmos_sdk_types "github.com/cosmos/cosmos-sdk/types"
+	"github.com/cosmos/cosmos-sdk/types/bech32"
+	slashing "github.com/cosmos/cosmos-sdk/x/slashing/types"
+	namada "github.com/firstset/tenderduty/v2/td2/namada"
+	"github.com/near/borsh-go"
+	rpchttp "github.com/tendermint/tendermint/rpc/client/http"
 )
 
 type NamadaAdapter struct {
@@ -146,4 +156,90 @@ func (d *NamadaAdapter) QueryUnvotedOpenProposalIds(ctx context.Context) ([]uint
 	}
 
 	return unVotedProposalIds, lastErr
+}
+
+func (d *NamadaAdapter) QueryValidatorInfo(ctx context.Context) (pub []byte, moniker string, jailed bool, bonded bool, err error) {
+	hexAddress := ""
+	if strings.Contains(d.ChainConfig.ValAddress, "valcons") {
+		_, bz, err := bech32.DecodeAndConvert(d.ChainConfig.ValAddress)
+		if err != nil {
+			return nil, "", false, false, errors.New("could not decode and convert your address " + d.ChainConfig.ValAddress)
+		}
+		hexAddress = fmt.Sprintf("%X", bz)
+	}
+
+	validatorAddress, ok := d.ChainConfig.Adapter.Configs["validator_address"].(string)
+
+	if ok {
+		response, err := d.ChainConfig.client.ABCIQuery(ctx, fmt.Sprintf("/vp/pos/validator/state/%s", validatorAddress), nil)
+		if err != nil {
+			return nil, "", false, false, errors.New("failed to query Namada validator's state " + validatorAddress)
+		}
+
+		state := namada.ValidatorStateInfo{}
+		err = borsh.Deserialize(&state, response.Response.Value)
+		if err != nil {
+			return nil, "", false, false, fmt.Errorf("unmarshal validator state: %w", err)
+		}
+		info := ValInfo{}
+		info.Bonded = state.State != nil && *state.State == namada.ValidatorStateConsensus
+		info.Jailed = state.State != nil && *state.State == namada.ValidatorStateJailed
+
+		response, err = d.ChainConfig.client.ABCIQuery(ctx, fmt.Sprintf("/vp/pos/validator/metadata/%s", validatorAddress), nil)
+		if err != nil {
+			return nil, "", false, false, fmt.Errorf("query validator metadata: %w", err)
+		}
+		metadata := namada.ValidatorMetaData{}
+		err = borsh.Deserialize(&metadata, response.Response.Value)
+		if err != nil {
+			return nil, "", false, false, fmt.Errorf("unmarshal validator metadata: %w", err)
+		}
+		if metadata.Metadata != nil && metadata.Metadata.Name != nil {
+			info.Moniker = *metadata.Metadata.Name
+		}
+		return ToBytes(hexAddress), info.Moniker, info.Jailed, info.Bonded, nil
+	}
+
+	return ToBytes(hexAddress), d.ChainConfig.ValAddress, false, true, nil
+}
+
+func getLivenessInfo(ctx context.Context, client *rpchttp.HTTP) (*namada.LivenessInfo, error) {
+	resp, err := client.ABCIQuery(ctx, "/vp/pos/validator/liveness_info", nil)
+	if err != nil {
+		return nil, fmt.Errorf("query validator liveness_info: %w", err)
+	}
+
+	livenessInfo := namada.LivenessInfo{}
+	err = borsh.Deserialize(&livenessInfo, resp.Response.Value)
+	if err != nil {
+		return nil, fmt.Errorf("unmarshal liveness info: %w", err)
+	}
+
+	return &livenessInfo, nil
+}
+
+func (d *NamadaAdapter) QuerySigningInfo(ctx context.Context) (*slashing.ValidatorSigningInfo, error) {
+	livenessInfo, err := getLivenessInfo(ctx, d.ChainConfig.client)
+	if err != nil {
+		return nil, err
+	}
+
+	signingInfo := slashing.ValidatorSigningInfo{}
+	hexAddress := strings.ToUpper(hex.EncodeToString(d.ChainConfig.valInfo.Conspub))
+	for _, v := range livenessInfo.Validators {
+		if v.CometAddress == hexAddress {
+			signingInfo.MissedBlocksCounter = int64(v.MissedVotes)
+		}
+	}
+
+	return &signingInfo, nil
+}
+
+func (d *NamadaAdapter) QuerySlashingParams(ctx context.Context) (*slashing.Params, error) {
+	livenessInfo, err := getLivenessInfo(ctx, d.ChainConfig.client)
+	if err != nil {
+		return nil, err
+	}
+
+	return &slashing.Params{SignedBlocksWindow: int64(livenessInfo.LivenessWindowLen), MinSignedPerWindow: cosmos_sdk_types.MustNewDecFromStr(livenessInfo.LivenessThreshold.String())}, nil
 }

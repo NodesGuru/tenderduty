@@ -12,6 +12,7 @@ require (
 	github.com/prometheus/client_golang v1.12.2
 	github.com/tendermint/tendermint v0.34.24
 	github.com/textileio/go-threads v1.1.5
+	github.com/near/borsh-go v0.3.1
 	golang.org/x/crypto v0.1.0
 	golang.org/x/term v0.1.0
 )

@@ -3,14 +3,19 @@ package tenderduty
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
 
+	"github.com/cosmos/cosmos-sdk/crypto/keys/ed25519"
+	"github.com/cosmos/cosmos-sdk/crypto/keys/secp256k1"
 	"github.com/cosmos/cosmos-sdk/types/bech32"
 	gov "github.com/cosmos/cosmos-sdk/x/gov/types"
+	slashing "github.com/cosmos/cosmos-sdk/x/slashing/types"
+	staking "github.com/cosmos/cosmos-sdk/x/staking/types"
 )
 
 func ConvertValopertToAccAddress(valoperAddr string) (string, error) {
@@ -153,4 +158,93 @@ func (d *DefaultAdapter) QueryUnvotedOpenProposalIds(ctx context.Context) ([]uin
 		}
 	}
 	return nil, err
+}
+
+func (d *DefaultAdapter) QueryValidatorInfo(ctx context.Context) (pub []byte, moniker string, jailed bool, bonded bool, err error) {
+	q := staking.QueryValidatorRequest{
+		ValidatorAddr: d.ChainConfig.ValAddress,
+	}
+	b, err := q.Marshal()
+	if err != nil {
+		return
+	}
+	resp, err := d.ChainConfig.client.ABCIQuery(ctx, "/cosmos.staking.v1beta1.Query/Validator", b)
+	if err != nil {
+		return
+	}
+	if resp.Response.Value == nil {
+		return nil, "", false, false, errors.New("could not find validator " + d.ChainConfig.ValAddress)
+	}
+	val := &staking.QueryValidatorResponse{}
+	err = val.Unmarshal(resp.Response.Value)
+	if err != nil {
+		return
+	}
+	if val.Validator.ConsensusPubkey == nil {
+		return nil, "", false, false, errors.New("got invalid consensus pubkey for " + d.ChainConfig.ValAddress)
+	}
+
+	pubBytes := make([]byte, 0)
+	switch val.Validator.ConsensusPubkey.TypeUrl {
+	case "/cosmos.crypto.ed25519.PubKey":
+		pk := ed25519.PubKey{}
+		err = pk.Unmarshal(val.Validator.ConsensusPubkey.Value)
+		if err != nil {
+			return
+		}
+		pubBytes = pk.Address().Bytes()
+	case "/cosmos.crypto.secp256k1.PubKey":
+		pk := secp256k1.PubKey{}
+		err = pk.Unmarshal(val.Validator.ConsensusPubkey.Value)
+		if err != nil {
+			return
+		}
+		pubBytes = pk.Address().Bytes()
+	}
+	if len(pubBytes) == 0 {
+		return nil, "", false, false, errors.New("could not get pubkey for" + d.ChainConfig.ValAddress)
+	}
+
+	return pubBytes, val.Validator.GetMoniker(), val.Validator.Jailed, val.Validator.Status == 3, nil
+}
+
+func (d *DefaultAdapter) QuerySigningInfo(ctx context.Context) (*slashing.ValidatorSigningInfo, error) {
+	// get current signing information (tombstoned, missed block count)
+	qSigning := slashing.QuerySigningInfoRequest{ConsAddress: d.ChainConfig.valInfo.Valcons}
+	b, err := qSigning.Marshal()
+	if err != nil {
+		return nil, fmt.Errorf("marshal signing info request: %w", err)
+	}
+	resp, err := d.ChainConfig.client.ABCIQuery(ctx, "/cosmos.slashing.v1beta1.Query/SigningInfo", b)
+	if resp == nil || resp.Response.Value == nil {
+		return nil, fmt.Errorf("query signing info: %w", err)
+	}
+	info := &slashing.QuerySigningInfoResponse{}
+	err = info.Unmarshal(resp.Response.Value)
+	if err != nil {
+		return nil, fmt.Errorf("unmarshal signing info response: %w", err)
+	}
+
+	return &info.ValSigningInfo, nil
+}
+
+func (d *DefaultAdapter) QuerySlashingParams(ctx context.Context) (*slashing.Params, error) {
+	qParams := &slashing.QueryParamsRequest{}
+	b, err := qParams.Marshal()
+	if err != nil {
+		return nil, fmt.Errorf("marshal slashing params: %w", err)
+	}
+	resp, err := d.ChainConfig.client.ABCIQuery(ctx, "/cosmos.slashing.v1beta1.Query/Params", b)
+	if err != nil {
+		return nil, fmt.Errorf("query slashing params: %w", err)
+	}
+	if resp.Response.Value == nil {
+		return nil, errors.New("🛑 could not query slashing params, got empty response")
+	}
+	params := &slashing.QueryParamsResponse{}
+	err = params.Unmarshal(resp.Response.Value)
+	if err != nil {
+		return nil, fmt.Errorf("unmarshal slashing params: %w", err)
+	}
+	return &params.Params, nil
 }

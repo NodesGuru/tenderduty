@@ -17,6 +17,7 @@ import (
 	"sync"
 	"time"
 
+	slashing "github.com/cosmos/cosmos-sdk/x/slashing/types"
 	dash "github.com/firstset/tenderduty/v2/td2/dashboard"
 	"github.com/go-yaml/yaml"
 	rpchttp "github.com/tendermint/tendermint/rpc/client/http"
@@ -618,4 +619,7 @@ func clearStale(alarms map[string]time.Time, what string, hasPagerduty bool, hou
 
 type ChainAdapter interface {
 	QueryUnvotedOpenProposalIds(ctx context.Context) ([]uint64, error)
+	QueryValidatorInfo(ctx context.Context) (pub []byte, moniker string, jailed bool, bonded bool, err error)
+	QuerySigningInfo(ctx context.Context) (*slashing.ValidatorSigningInfo, error)
+	QuerySlashingParams(ctx context.Context) (*slashing.Params, error)
 }
