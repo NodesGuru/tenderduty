@@ -96,7 +96,7 @@ func (d *DefaultAdapter) CountUnvotedOpenProposals(ctx context.Context) (int, er
 	if err == nil {
 		resp, err := d.ChainConfig.client.ABCIQuery(ctx, "/cosmos.gov.v1.Query/Proposals", b)
 		if resp == nil || resp.Response.Value == nil {
-			l("🛑 failed to query proposals", d.ChainConfig.name, err)
+			return 0, fmt.Errorf("🛑 failed to query proposals for %s, error: %v", d.ChainConfig.name, err)
 		} else {
 			proposals := &gov.QueryProposalsResponse{}
 			err = proposals.Unmarshal(resp.Response.Value)
@@ -122,10 +122,9 @@ func (d *DefaultAdapter) CountUnvotedOpenProposals(ctx context.Context) (int, er
 					}
 				}
 
-				d.ChainConfig.unvotedOpenGovProposals = len(unvotedProposals)
 				return len(unvotedProposals), nil
 			}
 		}
 	}
-	return 0, nil
+	return 0, err
 }
