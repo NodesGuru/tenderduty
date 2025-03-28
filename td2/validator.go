@@ -230,10 +230,15 @@ func (cc *ChainConfig) GetValInfo(first bool) (err error) {
 			ChainConfig: cc,
 		}
 	}
-	cc.unvotedOpenGovProposals, err = adapter.CountUnvotedOpenProposals(ctx)
-	l("🌟 found unvoted proposals", cc.name, cc.unvotedOpenGovProposals)
-	if td.Prom {
-		td.statsChan <- cc.mkUpdate(metricUnvotedProposals, float64(cc.unvotedOpenGovProposals), "")
+	unvotedCount, err := adapter.CountUnvotedOpenProposals(ctx)
+	if err == nil {
+		l("🌟 found unvoted proposals", cc.name, unvotedCount)
+		cc.unvotedOpenGovProposals = unvotedCount
+		if td.Prom {
+			td.statsChan <- cc.mkUpdate(metricUnvotedProposals, float64(cc.unvotedOpenGovProposals), "")
+		}
+	} else {
+		l(err)
 	}
 
 	// get current signing information (tombstoned, missed block count)
