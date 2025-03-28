@@ -72,10 +72,10 @@ func getVotingPeriodProposalIds(httpClient *http.Client, indexers []string) ([]s
 	return votingPeriodProposalIds, lastErr
 }
 
-func (d *NamadaAdapter) CountUnvotedOpenProposals(ctx context.Context) (int, error) {
+func (d *NamadaAdapter) QueryUnvotedOpenProposalIds(ctx context.Context) ([]uint64, error) {
 	// Store the last error to return if all indexer endpoints fail
 	var lastErr error
-	unVotedProposalIds := []string{}
+	var unVotedProposalIds []uint64
 
 	indexers, ok1 := d.ChainConfig.Adapter.Configs["indexers"].([]any)
 	validatorAddress, ok2 := d.ChainConfig.Adapter.Configs["validator_address"].(string)
@@ -95,7 +95,7 @@ func (d *NamadaAdapter) CountUnvotedOpenProposals(ctx context.Context) (int, err
 		votingPeriodProposalIds, err := getVotingPeriodProposalIds(httpClient, urls)
 		votedProposalIds := []string{}
 		if err != nil {
-			return 0, err
+			return nil, err
 		}
 
 		// check voting results using different indexers
@@ -136,10 +136,14 @@ func (d *NamadaAdapter) CountUnvotedOpenProposals(ctx context.Context) (int, err
 
 		for _, id := range votingPeriodProposalIds {
 			if !slices.Contains(votedProposalIds, id) {
-				unVotedProposalIds = append(unVotedProposalIds, id)
+				if idUint, err := strconv.ParseUint(id, 10, 64); err == nil {
+					unVotedProposalIds = append(unVotedProposalIds, idUint)
+				} else {
+					l(fmt.Sprintf("🛑 error converting proposal ID %s to uint64: %v", id, err))
+				}
 			}
 		}
 	}
 
-	return len(unVotedProposalIds), lastErr
+	return unVotedProposalIds, lastErr
 }
