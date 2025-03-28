@@ -86,7 +86,7 @@ func (d *DefaultAdapter) CheckIfValidatorVoted(ctx context.Context, proposalID u
 	return false, nil
 }
 
-func (d *DefaultAdapter) CountUnvotedOpenProposals(ctx context.Context) (int, error) {
+func (d *DefaultAdapter) QueryUnvotedOpenProposalIds(ctx context.Context) ([]uint64, error) {
 	// get all proposals in voting period
 	qProposal := gov.QueryProposalsRequest{
 		// Filter for only proposals in voting period
@@ -96,13 +96,13 @@ func (d *DefaultAdapter) CountUnvotedOpenProposals(ctx context.Context) (int, er
 	if err == nil {
 		resp, err := d.ChainConfig.client.ABCIQuery(ctx, "/cosmos.gov.v1.Query/Proposals", b)
 		if resp == nil || resp.Response.Value == nil {
-			return 0, fmt.Errorf("🛑 failed to query proposals for %s, error: %v", d.ChainConfig.name, err)
+			return nil, fmt.Errorf("🛑 failed to query proposals for %s, error: %v", d.ChainConfig.name, err)
 		} else {
 			proposals := &gov.QueryProposalsResponse{}
 			err = proposals.Unmarshal(resp.Response.Value)
 			if err == nil {
 				// Step 2: Filter out proposals the validator has already voted on
-				var unvotedProposals []gov.Proposal
+				var unvotedProposalsIds []uint64
 
 				for _, proposal := range proposals.Proposals {
 					// For each proposal, check if the validator has voted
@@ -118,13 +118,13 @@ func (d *DefaultAdapter) CountUnvotedOpenProposals(ctx context.Context) (int, er
 					}
 
 					if !hasVoted {
-						unvotedProposals = append(unvotedProposals, proposal)
+						unvotedProposalsIds = append(unvotedProposalsIds, proposal.ProposalId)
 					}
 				}
 
-				return len(unvotedProposals), nil
+				return unvotedProposalsIds, nil
 			}
 		}
 	}
-	return 0, err
+	return nil, err
 }

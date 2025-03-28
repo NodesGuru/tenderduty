@@ -230,12 +230,12 @@ func (cc *ChainConfig) GetValInfo(first bool) (err error) {
 			ChainConfig: cc,
 		}
 	}
-	unvotedCount, err := adapter.CountUnvotedOpenProposals(ctx)
+	unvotedProposalIds, err := adapter.QueryUnvotedOpenProposalIds(ctx)
 	if err == nil {
-		l("🌟 found unvoted proposals", cc.name, unvotedCount)
-		cc.unvotedOpenGovProposals = unvotedCount
+		l("🌟 found unvoted proposals", cc.name, unvotedProposalIds)
+		cc.unvotedOpenGovProposalIds = unvotedProposalIds
 		if td.Prom {
-			td.statsChan <- cc.mkUpdate(metricUnvotedProposals, float64(cc.unvotedOpenGovProposals), "")
+			td.statsChan <- cc.mkUpdate(metricUnvotedProposals, float64(len(cc.unvotedOpenGovProposalIds)), "")
 		}
 	} else {
 		l(err)

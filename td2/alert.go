@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -78,19 +80,6 @@ func (a *alarmCache) getCount(chain string) int {
 	a.notifyMux.RLock()
 	defer a.notifyMux.RUnlock()
 	return len(a.AllAlarms[chain])
-}
-
-// FindAlert checks if an alert with the given key exists for the specified chain
-func (a *alarmCache) findAlert(chain string, alertMsg string) bool {
-	if a.AllAlarms == nil || a.AllAlarms[chain] == nil {
-		return false
-	}
-
-	a.notifyMux.RLock()
-	defer a.notifyMux.RUnlock()
-
-	_, exists := a.AllAlarms[chain][alertMsg]
-	return exists
 }
 
 func (a *alarmCache) clearAll(chain string) {
@@ -624,8 +613,8 @@ func (cc *ChainConfig) watch() {
 			id := cc.valInfo.Valcons + "empty_percent"
 			td.alert(
 				cc.name,
-				fmt.Sprintf("%s has > %d%% empty blocks (%d of %d proposed blocks) on %s", 
-					cc.valInfo.Moniker, 
+				fmt.Sprintf("%s has > %d%% empty blocks (%d of %d proposed blocks) on %s",
+					cc.valInfo.Moniker,
 					cc.Alerts.EmptyWindow,
 					int(cc.statTotalPropsEmpty),
 					int(cc.statTotalProps),
@@ -641,8 +630,8 @@ func (cc *ChainConfig) watch() {
 			id := cc.valInfo.Valcons + "empty_percent"
 			td.alert(
 				cc.name,
-				fmt.Sprintf("%s has > %d%% empty blocks (%d of %d proposed blocks) on %s", 
-					cc.valInfo.Moniker, 
+				fmt.Sprintf("%s has > %d%% empty blocks (%d of %d proposed blocks) on %s",
+					cc.valInfo.Moniker,
 					cc.Alerts.EmptyWindow,
 					int(cc.statTotalPropsEmpty),
 					int(cc.statTotalProps),
@@ -689,9 +678,20 @@ func (cc *ChainConfig) watch() {
 		}
 
 		// there are open proposals that the validator has not voted on
-		id := cc.valInfo.Valcons + "gov_voting"
-		alertMsg := "Severity: warning\nThere are open proposal(s) that the validator has not voted on"
-		if cc.unvotedOpenGovProposals > 0 {
+		idTemplate := "%s_gov_voting_%d"
+		msgTemplate := "[WARNING] There is an open proposal (#%v) that the validator has not voted on"
+
+		// Create a map for faster lookups of unvoted proposal IDs
+		unvotedProposalMap := make(map[uint64]bool)
+		for _, id := range cc.unvotedOpenGovProposalIds {
+			unvotedProposalMap[id] = true
+		}
+
+		for _, proposalID := range cc.unvotedOpenGovProposalIds {
+			id := fmt.Sprintf(idTemplate, cc.valInfo.Valcons, proposalID)
+			alertMsg := fmt.Sprintf(msgTemplate, proposalID)
+
+			// Send alert for this specific proposal
 			td.alert(
 				cc.name,
 				alertMsg,
@@ -699,7 +699,38 @@ func (cc *ChainConfig) watch() {
 				false,
 				&id,
 			)
-		} else if (cc.unvotedOpenGovProposals == 0) && alarms.findAlert(cc.name, alertMsg) {
+		}
+
+		// check and resolve the alert if the proposal has been voted on
+		// compile the regex to extract proposal IDs - match any digits after "proposal (#"
+		proposalRegex := regexp.MustCompile(`proposal \(#(\d+)\)`)
+		var idsToBeResolved []string
+
+		// Use RLock to safely read the alerts map
+		alarms.notifyMux.RLock()
+
+		// First find all proposal alerts that need to be cleared
+		if alarms.AllAlarms[cc.name] != nil {
+			for alertMsg := range alarms.AllAlarms[cc.name] {
+				// Use regex to find and extract the proposal ID
+				matches := proposalRegex.FindStringSubmatch(alertMsg)
+				if len(matches) >= 2 {
+					// matches[0] is the full match, matches[1] is the captured group (the ID)
+					if proposalID, err := strconv.ParseUint(matches[1], 10, 64); err == nil {
+						// If this proposal ID is no longer in our unvoted list, we should clear it
+						if !unvotedProposalMap[proposalID] {
+							idsToBeResolved = append(idsToBeResolved, matches[1])
+						}
+					}
+				}
+			}
+		}
+
+		alarms.notifyMux.RUnlock()
+		for _, proposalID := range idsToBeResolved {
+			id := fmt.Sprintf(idTemplate, cc.valInfo.Valcons, proposalID)
+			alertMsg := fmt.Sprintf(msgTemplate, proposalID)
+
 			td.alert(
 				cc.name,
 				alertMsg,
@@ -707,8 +738,9 @@ func (cc *ChainConfig) watch() {
 				true,
 				&id,
 			)
-			cc.activeAlerts = alarms.getCount(cc.name)
 		}
+
+		cc.activeAlerts = alarms.getCount(cc.name)
 
 		if td.Prom {
 			// raw block timer, ignoring finalized state
