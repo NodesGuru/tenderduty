@@ -1,3 +1,33 @@
+This is a forked repo from <https://github.com/blockpane/tenderduty> and we have added the following feature.
+
+### Goverance Proposal Monitoring
+
+When there are proposals in voting period and the validator has not voted on, an alert is sent to the configured channels.
+
+![gov-monitoring](./docs/img/tl-gov-monitoring.png)
+
+### Support for Namada
+
+For Namada, lots of information can be fetched via Namada indexers, instead of using ABCI queries. Thus we implement the adapter pattern so that the queries can be dynamically adjusted based on the type of chains. The following configuration needs to be added for a Namada validator:
+
+```yaml
+chains:
+  "Namada":
+    # the following part is not required for other types of chains
+    adapter:
+      name: namada
+      configs:
+        validator_address: tnam1....
+        indexers:
+          - https://index-namada.5elementsnodes.com
+          - https://namada-indexer.denodes.xyz
+          - https://namada-indexer.0xcryptovestor.com
+```
+
+---
+
+_Original README starts here_
+
 # TenderDuty v2
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/firstset/tenderduty.svg)](https://pkg.go.dev/github.com/firstset/tenderduty)
@@ -14,19 +44,19 @@ v2 is complete rewrite of the original tenderduty graciously sponsored by the [O
 
 The [documentation](docs/README.md) is a work-in-progress.
 
-## Runtime options:
+## Runtime options
 
 ```
 $ tenderduty -h
 Usage of tenderduty:
   -example-config
-    	print the an example config.yml and exit
+     print the an example config.yml and exit
   -f string
-    	configuration file to use (default "config.yml")
+     configuration file to use (default "config.yml")
   -state string
-    	file for storing state between restarts (default ".tenderduty-state.json")
+     file for storing state between restarts (default ".tenderduty-state.json")
   -cc string
-    	directory containing additional chain specific configurations (default "chains.d")
+     directory containing additional chain specific configurations (default "chains.d")
 ```
 
 ## Installing
@@ -43,14 +73,13 @@ docker run -d --name tenderduty -p "8888:8888" -p "28686:28686" --restart unless
 docker logs -f --tail 20 tenderduty
 ```
 
-
 ## Split Configuration
 
 For validators with many chains, chain specific configuration may be split into additional files and placed into the directory "chains.d".
 
 This directory can be changed with the -cc option
 
-The user friendly chain label will be taken from the name of the file.  
+The user friendly chain label will be taken from the name of the file.
 
 For example:
 
@@ -71,4 +100,3 @@ chain_id: demo-1
 ## Contributions
 
 Contributions are welcome, please open pull requests against the 'develop' branch, not main.
-
