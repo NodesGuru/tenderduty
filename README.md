@@ -1,47 +1,18 @@
-This is a forked repo from <https://github.com/blockpane/tenderduty> and we have added the following feature.
+# 👉 Read this first!
 
-### Goverance Proposal Monitoring
+This is a fork of the original [Tenderduty](https://github.com/blockpane/tenderduty) repository, which is no longer maintained by the author, and we have added the following features:
 
-When there are proposals in voting period and the validator has not voted on, an alert is sent to the configured channels.
+- **[Governance proposal monitoring.](#goverance-proposal-monitoring)** 
+   - Receive alerts when there are proposals in voting period and the validator has not voted on. The alert is resolved once the validator has voted. 
+   - Unvoted proposals are tracked and reported in the dashboard. 
+   - A Prometheus metric is also added to monitor the number of unvoted proposals.
+- **[Improved support for Namada.](#support-for-namada)** Proper reporting of otherwise missing information such as the Moniker, uptime data or slashing threshold.
 
-![gov-monitoring](./docs/img/tl-gov-monitoring.png)
+We plan to keep maintaining and improving Tenderduty for our own use, and we encourage contributions to make it more useful.
 
-### Support for Namada
-
-For Namada, lots of information can be fetched via Namada indexers, instead of using ABCI queries. Thus we implement the provider pattern so that the queries can be dynamically adjusted based on the type of chains. The following configuration needs to be added for a Namada validator:
-
-```yaml
-chains:
-  "Namada":
-    # the following part is not required for other types of chains
-    provider:
-      name: namada
-      configs:
-        validator_address: tnam1....
-        indexers:
-          - https://index-namada.5elementsnodes.com
-          - https://namada-indexer.denodes.xyz
-          - https://namada-indexer.0xcryptovestor.com
-```
-
-### Run the latest version of this Tenderduty via Docker
-
-Versions of this forked Tenderduty project are published on Docker Hub at `firstset/tenderduty`. For now, we always use the `latest` tag and later on will add semantic versioning for it.
-
-```bash
-# for the first time, touch a file for saving alert states
-touch .tenderduty-state.json
-
-# fetch an example-config and modify it
-wget https://github.com/Firstset/tenderduty/blob/main/example-config.yml
-
-# create the container, port 8888 is for the dashboard, and 28686 is for the prometheus metrics
-docker run -d --name tenderduty -p "8888:8888" -p "28686:28686" --restart unless-stopped -v $(pwd)/config.yml:/var/lib/tenderduty/config.yml -v $(pwd)/.tenderduty-state.json:/var/lib/tenderduty/.tenderduty-state.json firstset/tenderduty:latest
-```
+We are documenting new features in more detail at the end of the original README, which starts below.
 
 ---
-
-_Original README starts here_
 
 # TenderDuty v2
 
@@ -115,3 +86,44 @@ chain_id: demo-1
 ## Contributions
 
 Contributions are welcome, please open pull requests against the 'develop' branch, not main.
+
+## New features
+
+### Goverance Proposal Monitoring
+
+When there are proposals in voting period and the validator has not voted on, an alert is sent to the configured channels.
+
+![gov-monitoring](./docs/img/tl-gov-monitoring.png)
+
+### Support for Namada
+
+For Namada, lots of information can be fetched via Namada indexers, instead of using ABCI queries. Thus we implement the provider pattern so that the queries can be dynamically adjusted based on the type of chains. The following configuration needs to be added for a Namada validator:
+
+```yaml
+chains:
+  "Namada":
+    # the following part is not required for other types of chains
+    provider:
+      name: namada
+      configs:
+        validator_address: tnam1....
+        indexers:
+          - https://index-namada.5elementsnodes.com
+          - https://namada-indexer.denodes.xyz
+          - https://namada-indexer.0xcryptovestor.com
+```
+
+### Run the latest version of this Tenderduty via Docker
+
+Versions of this forked Tenderduty project are published on Docker Hub at `firstset/tenderduty`. For now, we always use the `latest` tag and later on will add semantic versioning for it.
+
+```bash
+# for the first time, touch a file for saving alert states
+touch .tenderduty-state.json
+
+# fetch an example-config and modify it
+wget https://github.com/Firstset/tenderduty/blob/main/example-config.yml
+
+# create the container, port 8888 is for the dashboard, and 28686 is for the prometheus metrics
+docker run -d --name tenderduty -p "8888:8888" -p "28686:28686" --restart unless-stopped -v $(pwd)/config.yml:/var/lib/tenderduty/config.yml -v $(pwd)/.tenderduty-state.json:/var/lib/tenderduty/.tenderduty-state.json firstset/tenderduty:latest
+```
