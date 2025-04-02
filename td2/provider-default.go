@@ -42,11 +42,11 @@ func ConvertValopertToAccAddress(valoperAddr string) (string, error) {
 	return accAddress, nil
 }
 
-type DefaultAdapter struct {
+type DefaultProvider struct {
 	ChainConfig *ChainConfig
 }
 
-func (d *DefaultAdapter) CheckIfValidatorVoted(ctx context.Context, proposalID uint64, accAddress string) (bool, error) {
+func (d *DefaultProvider) CheckIfValidatorVoted(ctx context.Context, proposalID uint64, accAddress string) (bool, error) {
 	params := url.Values{}
 	query := fmt.Sprintf("\"proposal_vote.proposal_id='%d' AND proposal_vote.voter='%s'\"", proposalID, accAddress)
 	params.Add("query", query)
@@ -117,7 +117,7 @@ func (d *DefaultAdapter) CheckIfValidatorVoted(ctx context.Context, proposalID u
 	return false, nil
 }
 
-func (d *DefaultAdapter) QueryUnvotedOpenProposalIds(ctx context.Context) ([]uint64, error) {
+func (d *DefaultProvider) QueryUnvotedOpenProposalIds(ctx context.Context) ([]uint64, error) {
 	// get all proposals in voting period
 	qProposal := gov.QueryProposalsRequest{
 		// Filter for only proposals in voting period
@@ -160,7 +160,7 @@ func (d *DefaultAdapter) QueryUnvotedOpenProposalIds(ctx context.Context) ([]uin
 	return nil, err
 }
 
-func (d *DefaultAdapter) QueryValidatorInfo(ctx context.Context) (pub []byte, moniker string, jailed bool, bonded bool, err error) {
+func (d *DefaultProvider) QueryValidatorInfo(ctx context.Context) (pub []byte, moniker string, jailed bool, bonded bool, err error) {
 	q := staking.QueryValidatorRequest{
 		ValidatorAddr: d.ChainConfig.ValAddress,
 	}
@@ -208,7 +208,7 @@ func (d *DefaultAdapter) QueryValidatorInfo(ctx context.Context) (pub []byte, mo
 	return pubBytes, val.Validator.GetMoniker(), val.Validator.Jailed, val.Validator.Status == 3, nil
 }
 
-func (d *DefaultAdapter) QuerySigningInfo(ctx context.Context) (*slashing.ValidatorSigningInfo, error) {
+func (d *DefaultProvider) QuerySigningInfo(ctx context.Context) (*slashing.ValidatorSigningInfo, error) {
 	// get current signing information (tombstoned, missed block count)
 	qSigning := slashing.QuerySigningInfoRequest{ConsAddress: d.ChainConfig.valInfo.Valcons}
 	b, err := qSigning.Marshal()
@@ -228,7 +228,7 @@ func (d *DefaultAdapter) QuerySigningInfo(ctx context.Context) (*slashing.Valida
 	return &info.ValSigningInfo, nil
 }
 
-func (d *DefaultAdapter) QuerySlashingParams(ctx context.Context) (*slashing.Params, error) {
+func (d *DefaultProvider) QuerySlashingParams(ctx context.Context) (*slashing.Params, error) {
 	qParams := &slashing.QueryParamsRequest{}
 	b, err := qParams.Marshal()
 	if err != nil {

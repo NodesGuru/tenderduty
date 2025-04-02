@@ -1,3 +1,4 @@
+// the code about querying validator information is taken from https://github.com/ekhvalov/tenderduty/blob/main/td2/validator.go with minor modifications
 package tenderduty
 
 import (
@@ -21,7 +22,7 @@ import (
 	rpchttp "github.com/tendermint/tendermint/rpc/client/http"
 )
 
-type NamadaAdapter struct {
+type NamadaProvider struct {
 	ChainConfig *ChainConfig
 }
 
@@ -82,13 +83,13 @@ func getVotingPeriodProposalIds(httpClient *http.Client, indexers []string) ([]s
 	return votingPeriodProposalIds, lastErr
 }
 
-func (d *NamadaAdapter) QueryUnvotedOpenProposalIds(ctx context.Context) ([]uint64, error) {
+func (d *NamadaProvider) QueryUnvotedOpenProposalIds(ctx context.Context) ([]uint64, error) {
 	// Store the last error to return if all indexer endpoints fail
 	var lastErr error
 	var unVotedProposalIds []uint64
 
-	indexers, ok1 := d.ChainConfig.Adapter.Configs["indexers"].([]any)
-	validatorAddress, ok2 := d.ChainConfig.Adapter.Configs["validator_address"].(string)
+	indexers, ok1 := d.ChainConfig.Provider.Configs["indexers"].([]any)
+	validatorAddress, ok2 := d.ChainConfig.Provider.Configs["validator_address"].(string)
 	if ok1 && ok2 {
 		// Create a reusable HTTP client with timeout
 		httpClient := &http.Client{
@@ -158,7 +159,7 @@ func (d *NamadaAdapter) QueryUnvotedOpenProposalIds(ctx context.Context) ([]uint
 	return unVotedProposalIds, lastErr
 }
 
-func (d *NamadaAdapter) QueryValidatorInfo(ctx context.Context) (pub []byte, moniker string, jailed bool, bonded bool, err error) {
+func (d *NamadaProvider) QueryValidatorInfo(ctx context.Context) (pub []byte, moniker string, jailed bool, bonded bool, err error) {
 	hexAddress := ""
 	if strings.Contains(d.ChainConfig.ValAddress, "valcons") {
 		_, bz, err := bech32.DecodeAndConvert(d.ChainConfig.ValAddress)
@@ -168,7 +169,7 @@ func (d *NamadaAdapter) QueryValidatorInfo(ctx context.Context) (pub []byte, mon
 		hexAddress = fmt.Sprintf("%X", bz)
 	}
 
-	validatorAddress, ok := d.ChainConfig.Adapter.Configs["validator_address"].(string)
+	validatorAddress, ok := d.ChainConfig.Provider.Configs["validator_address"].(string)
 
 	if ok {
 		response, err := d.ChainConfig.client.ABCIQuery(ctx, fmt.Sprintf("/vp/pos/validator/state/%s", validatorAddress), nil)
@@ -218,7 +219,7 @@ func getLivenessInfo(ctx context.Context, client *rpchttp.HTTP) (*namada.Livenes
 	return &livenessInfo, nil
 }
 
-func (d *NamadaAdapter) QuerySigningInfo(ctx context.Context) (*slashing.ValidatorSigningInfo, error) {
+func (d *NamadaProvider) QuerySigningInfo(ctx context.Context) (*slashing.ValidatorSigningInfo, error) {
 	livenessInfo, err := getLivenessInfo(ctx, d.ChainConfig.client)
 	if err != nil {
 		return nil, err
@@ -235,7 +236,7 @@ func (d *NamadaAdapter) QuerySigningInfo(ctx context.Context) (*slashing.Validat
 	return &signingInfo, nil
 }
 
-func (d *NamadaAdapter) QuerySlashingParams(ctx context.Context) (*slashing.Params, error) {
+func (d *NamadaProvider) QuerySlashingParams(ctx context.Context) (*slashing.Params, error) {
 	livenessInfo, err := getLivenessInfo(ctx, d.ChainConfig.client)
 	if err != nil {
 		return nil, err

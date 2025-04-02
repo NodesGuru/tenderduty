@@ -81,7 +81,7 @@ type savedState struct {
 	NodesDown map[string]map[string]time.Time `json:"nodes_down"`
 }
 
-type AdapterConfig struct {
+type ProviderConfig struct {
 	Name    string         `yaml:"name"`
 	Configs map[string]any `yaml:"configs"`
 }
@@ -132,9 +132,9 @@ type ChainConfig struct {
 	PublicFallback bool `yaml:"public_fallback"`
 	// Nodes defines what RPC servers to connect to.
 	Nodes []*NodeConfig `yaml:"nodes"`
-	// Adapter defines what implementation should be used for checking a chain's status
+	// Provider defines what implementation should be used for checking a chain's status
 	// currently it supports two values: `default` or `namada`
-	Adapter AdapterConfig `yaml:"adapter"`
+	Provider ProviderConfig `yaml:"provider"`
 }
 
 // mkUpdate returns the info needed by prometheus for a gauge.
@@ -617,7 +617,7 @@ func clearStale(alarms map[string]time.Time, what string, hasPagerduty bool, hou
 	}
 }
 
-type ChainAdapter interface {
+type ChainProvider interface {
 	QueryUnvotedOpenProposalIds(ctx context.Context) ([]uint64, error)
 	QueryValidatorInfo(ctx context.Context) (pub []byte, moniker string, jailed bool, bonded bool, err error)
 	QuerySigningInfo(ctx context.Context) (*slashing.ValidatorSigningInfo, error)

@@ -32,19 +32,19 @@ func (cc *ChainConfig) GetMinSignedPerWindow() (err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	var adapter ChainAdapter
-	switch cc.Adapter.Name {
+	var provider ChainProvider
+	switch cc.Provider.Name {
 	case "namada":
-		adapter = &NamadaAdapter{
+		provider = &NamadaProvider{
 			ChainConfig: cc,
 		}
 	default:
-		adapter = &DefaultAdapter{
+		provider = &DefaultProvider{
 			ChainConfig: cc,
 		}
 	}
 
-	slashingParams, err := adapter.QuerySlashingParams(ctx)
+	slashingParams, err := provider.QuerySlashingParams(ctx)
 	if err != nil {
 		return
 	}
@@ -65,14 +65,14 @@ func (cc *ChainConfig) GetValInfo(first bool) (err error) {
 		cc.valInfo = &ValInfo{}
 	}
 
-	var adapter ChainAdapter
-	switch cc.Adapter.Name {
+	var provider ChainProvider
+	switch cc.Provider.Name {
 	case "namada":
-		adapter = &NamadaAdapter{
+		provider = &NamadaProvider{
 			ChainConfig: cc,
 		}
 	default:
-		adapter = &DefaultAdapter{
+		provider = &DefaultProvider{
 			ChainConfig: cc,
 		}
 	}
@@ -80,7 +80,7 @@ func (cc *ChainConfig) GetValInfo(first bool) (err error) {
 	// Fetch info from /cosmos.staking.v1beta1.Query/Validator
 	// it's easier to ask people to provide valoper since it's readily available on
 	// explorers, so make it easy and lookup the consensus key for them.
-	conspub, moniker, jailed, bonded, err := adapter.QueryValidatorInfo(ctx)
+	conspub, moniker, jailed, bonded, err := provider.QueryValidatorInfo(ctx)
 	if err != nil {
 		return
 	}
@@ -127,7 +127,7 @@ func (cc *ChainConfig) GetValInfo(first bool) (err error) {
 		}
 	}
 
-	unvotedProposalIds, err := adapter.QueryUnvotedOpenProposalIds(ctx)
+	unvotedProposalIds, err := provider.QueryUnvotedOpenProposalIds(ctx)
 	if err == nil {
 		l("🌟 found unvoted proposals", cc.name, unvotedProposalIds)
 		cc.unvotedOpenGovProposalIds = unvotedProposalIds
@@ -138,7 +138,7 @@ func (cc *ChainConfig) GetValInfo(first bool) (err error) {
 		l(err)
 	}
 
-	signingInfo, err := adapter.QuerySigningInfo(ctx)
+	signingInfo, err := provider.QuerySigningInfo(ctx)
 	if err != nil {
 		return
 	}
@@ -153,7 +153,7 @@ func (cc *ChainConfig) GetValInfo(first bool) (err error) {
 
 	// finally get the signed blocks window
 	if cc.valInfo.Window == 0 {
-		slashingParams, error := adapter.QuerySlashingParams(ctx)
+		slashingParams, error := provider.QuerySlashingParams(ctx)
 		if error != nil {
 			return
 		}
