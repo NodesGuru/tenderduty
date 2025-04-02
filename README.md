@@ -8,13 +8,13 @@ When there are proposals in voting period and the validator has not voted on, an
 
 ### Support for Namada
 
-For Namada, lots of information can be fetched via Namada indexers, instead of using ABCI queries. Thus we implement the adapter pattern so that the queries can be dynamically adjusted based on the type of chains. The following configuration needs to be added for a Namada validator:
+For Namada, lots of information can be fetched via Namada indexers, instead of using ABCI queries. Thus we implement the provider pattern so that the queries can be dynamically adjusted based on the type of chains. The following configuration needs to be added for a Namada validator:
 
 ```yaml
 chains:
   "Namada":
     # the following part is not required for other types of chains
-    adapter:
+    provider:
       name: namada
       configs:
         validator_address: tnam1....
@@ -22,6 +22,21 @@ chains:
           - https://index-namada.5elementsnodes.com
           - https://namada-indexer.denodes.xyz
           - https://namada-indexer.0xcryptovestor.com
+```
+
+### Run the latest version of this Tenderduty via Docker
+
+Versions of this forked Tenderduty project are published on Docker Hub at `firstset/tenderduty`. For now, we always use the `latest` tag and later on will add semantic versioning for it.
+
+```bash
+# for the first time, touch a file for saving alert states
+touch .tenderduty-state.json
+
+# fetch an example-config and modify it
+wget https://github.com/Firstset/tenderduty/blob/main/example-config.yml
+
+# create the container, port 8888 is for the dashboard, and 28686 is for the prometheus metrics
+docker run -d --name tenderduty -p "8888:8888" -p "28686:28686" --restart unless-stopped -v $(pwd)/config.yml:/var/lib/tenderduty/config.yml -v $(pwd)/.tenderduty-state.json:/var/lib/tenderduty/.tenderduty-state.json firstset/tenderduty:latest
 ```
 
 ---
