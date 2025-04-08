@@ -7,6 +7,7 @@ This is a fork of the original [Tenderduty](https://github.com/blockpane/tenderd
    - Unvoted proposals are tracked and reported in the dashboard. 
    - A Prometheus metric is also added to monitor the number of unvoted proposals.
 - **[Improved support for Namada.](#support-for-namada)** Proper reporting of otherwise missing information such as the Moniker, uptime data or slashing threshold.
+- **[Pre-built binaries.](#pre-built-binaries)** Releases now include pre-built binaries for Linux and MacOS.
 
 We plan to keep maintaining and improving Tenderduty for our own use, and we encourage contributions to make it more useful.
 
@@ -113,6 +114,10 @@ chains:
           - https://namada-indexer.0xcryptovestor.com
 ```
 
+### Pre-built binaries
+
+Releases now include pre-built binaries for Linux and MacOS and ARM64/AMD64, as well as a checksum file for verifying the integrity of the downloaded files.
+
 ### Run the latest version of this Tenderduty via Docker
 
 Versions of this forked Tenderduty project are published on Docker Hub at `firstset/tenderduty`. For now, we always use the `latest` tag and later on will add semantic versioning for it.
@@ -127,3 +132,4 @@ wget https://github.com/Firstset/tenderduty/blob/main/example-config.yml
 # create the container, port 8888 is for the dashboard, and 28686 is for the prometheus metrics
 docker run -d --name tenderduty -p "8888:8888" -p "28686:28686" --restart unless-stopped -v $(pwd)/config.yml:/var/lib/tenderduty/config.yml -v $(pwd)/.tenderduty-state.json:/var/lib/tenderduty/.tenderduty-state.json firstset/tenderduty:latest
 ```
+
