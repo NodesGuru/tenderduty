@@ -1,7 +1,7 @@
 
 async function loadState() {
-   const enableLogs = await fetch("logsenabled", {
-   //const enableLogs = await fetch("http://127.0.0.1:8888/logsenabled", {
+   //const enableLogs = await fetch("logsenabled", {
+   const enableLogs = await fetch("http://127.0.0.1:8888/logsenabled", {
         method: 'GET',
         mode: 'cors',
         cache: 'no-cache',
@@ -18,8 +18,8 @@ async function loadState() {
     if (showLog.enabled === false) {
         document.getElementById("logContainer").hidden = true
     }
-    //const response = await fetch("http://127.0.0.1:8888/state", {
-    const response = await fetch("state", {
+    const response = await fetch("http://127.0.0.1:8888/state", {
+    //const response = await fetch("state", {
         method: 'GET',
         mode: 'cors',
         cache: 'no-cache',
@@ -35,8 +35,8 @@ async function loadState() {
     }
     updateTable(initialState)
     drawSeries(initialState)
-    const logResponse = await fetch("logs", {
-    //const logResponse = await fetch("http://127.0.0.1:8888/logs", {
+    //const logResponse = await fetch("logs", {
+    const logResponse = await fetch("http://127.0.0.1:8888/logs", {
         method: 'GET',
         mode: 'cors',
         cache: 'no-cache',
