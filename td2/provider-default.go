@@ -161,6 +161,16 @@ func (d *DefaultProvider) QueryUnvotedOpenProposalIds(ctx context.Context) ([]ui
 }
 
 func (d *DefaultProvider) QueryValidatorInfo(ctx context.Context) (pub []byte, moniker string, jailed bool, bonded bool, err error) {
+	if strings.Contains(d.ChainConfig.ValAddress, "valcons") {
+		_, bz, err := bech32.DecodeAndConvert(d.ChainConfig.ValAddress)
+		if err != nil {
+			return nil, "", false, false, errors.New("could not decode and convert your address" + d.ChainConfig.ValAddress)
+		}
+
+		hexAddress := fmt.Sprintf("%X", bz)
+		return ToBytes(hexAddress), d.ChainConfig.ValAddress, false, true, nil
+	}
+
 	q := staking.QueryValidatorRequest{
 		ValidatorAddr: d.ChainConfig.ValAddress,
 	}
