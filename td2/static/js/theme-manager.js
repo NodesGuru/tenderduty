@@ -1,28 +1,22 @@
 /**
  * ThemeManager
- * Handles theme switching between light and dark modes
+ * Handles theme switching between light and dark modes using CSS variables
  */
-import { THEME } from './constants.js';
-
 export class ThemeManager {
   constructor() {
     this.isDark = true;
-    this.textColor = THEME.DARK.TEXT_COLOR;
-    this.signColorAlpha = THEME.DARK.SIGN_COLOR_ALPHA;
     
     // Elements that need theme switching
-    this.elements = {
-      body: document.body,
-      canvasDiv: document.getElementById('canvasDiv'),
-      tableDiv: document.getElementById('tableDiv'),
-      legendContainer: document.getElementById('legendContainer'),
-      logs: document.getElementById('logs')
-    };
+    this.body = document.body;
+    this.logElement = document.getElementById('logs');
+    
+    // Initialize theme based on body class
+    this.isDark = this.body.classList.contains('uk-light');
   }
 
   /**
    * Toggle between light and dark themes
-   * @returns {Object} Theme configuration with updated colors
+   * @returns {Object} Theme configuration with updated status
    */
   toggleTheme() {
     this.isDark = !this.isDark;
@@ -35,49 +29,37 @@ export class ThemeManager {
     
     // Dispatch a custom event for other components to react to theme change
     const event = new CustomEvent('themeChanged', {
-      detail: {
-        isDark: this.isDark,
-        textColor: this.textColor,
-        signColorAlpha: this.signColorAlpha
-      }
+      detail: { isDark: this.isDark }
     });
     document.dispatchEvent(event);
     
-    return {
-      isDark: this.isDark,
-      textColor: this.textColor,
-      signColorAlpha: this.signColorAlpha
-    };
+    return { isDark: this.isDark };
   }
 
   /**
-   * Apply dark theme to elements
+   * Apply dark theme using CSS classes
    * @private
    */
   _applyDarkTheme() {
-    this.textColor = THEME.DARK.TEXT_COLOR;
-    this.signColorAlpha = THEME.DARK.SIGN_COLOR_ALPHA;
+    // Update body class for global styles
+    this.body.classList.remove('uk-text-default');
+    this.body.classList.add('uk-background-secondary', 'uk-light');
     
-    this.elements.body.className = THEME.DARK.BODY_CLASS;
-    this.elements.canvasDiv.className = `uk-width-expand uk-overflow-auto ${THEME.DARK.CONTAINER_CLASS}`;
-    this.elements.tableDiv.className = `uk-padding-small uk-text-small ${THEME.DARK.CONTAINER_CLASS} uk-overflow-auto`;
-    this.elements.legendContainer.className = `uk-nav-center ${THEME.DARK.CONTAINER_CLASS} uk-padding-remove`;
-    this.elements.logs.style = THEME.DARK.LOG_STYLE;
+    // Update logs element
+    this.logElement.style = "background: #080808; height: 300px;";
   }
 
   /**
-   * Apply light theme to elements
+   * Apply light theme using CSS classes
    * @private
    */
   _applyLightTheme() {
-    this.textColor = THEME.LIGHT.TEXT_COLOR;
-    this.signColorAlpha = THEME.LIGHT.SIGN_COLOR_ALPHA;
+    // Update body class for global styles
+    this.body.classList.remove('uk-background-secondary', 'uk-light');
+    this.body.classList.add('uk-text-default');
     
-    this.elements.body.className = THEME.LIGHT.BODY_CLASS;
-    this.elements.canvasDiv.className = `uk-width-expand uk-overflow-auto ${THEME.LIGHT.CONTAINER_CLASS}`;
-    this.elements.tableDiv.className = `uk-padding-small uk-text-small ${THEME.LIGHT.CONTAINER_CLASS} uk-overflow-auto`;
-    this.elements.legendContainer.className = `uk-nav-center ${THEME.LIGHT.CONTAINER_CLASS} uk-padding-remove`;
-    this.elements.logs.style = THEME.LIGHT.LOG_STYLE;
+    // Update logs element
+    this.logElement.style = "color: #0a0a0a; background: #dddddd; height: 300px;";
   }
 
   /**
@@ -85,10 +67,6 @@ export class ThemeManager {
    * @returns {Object} Current theme configuration
    */
   getThemeConfig() {
-    return {
-      isDark: this.isDark,
-      textColor: this.textColor,
-      signColorAlpha: this.signColorAlpha
-    };
+    return { isDark: this.isDark };
   }
 } 

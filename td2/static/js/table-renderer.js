@@ -6,11 +6,20 @@ export class TableRenderer {
   constructor() {
     this.statusTable = document.getElementById('statusTable');
     this.blocks = new Map(); // Track block heights for animation
+    this.gridRenderer = null; // Will be set by the app
     
     // Listen for theme changes to potentially update table styles
     document.addEventListener('themeChanged', () => {
       // Future implementation: update table styles based on theme
     });
+  }
+
+  /**
+   * Set reference to GridRenderer for height updates
+   * @param {GridRenderer} gridRenderer - Reference to grid renderer
+   */
+  setGridRenderer(gridRenderer) {
+    this.gridRenderer = gridRenderer;
   }
 
   /**
@@ -103,7 +112,14 @@ export class TableRenderer {
    * @private
    */
   _getHeightAnimationClass(chainId, height) {
-    const animationClass = this.blocks.get(chainId) !== height ? 'uk-animation-scale-up' : '';
+    // Check with grid renderer if available
+    if (this.gridRenderer && this.gridRenderer.updateBlockHeight(chainId, height)) {
+      return 'block-height-change';
+    }
+    
+    // Fallback to our own tracking
+    const previousHeight = this.blocks.get(chainId);
+    const animationClass = previousHeight !== height ? 'block-height-change' : '';
     this.blocks.set(chainId, height);
     return animationClass;
   }
@@ -136,7 +152,7 @@ export class TableRenderer {
       
       // Column 3: Height with animation
       const heightClass = this._getHeightAnimationClass(chainStatus.chain_id, chainStatus.height);
-      row.insertCell(2).innerHTML = `<div class="${heightClass}" style="font-family: monospace; color: #6f6f6f; text-align: start">${_.escape(chainStatus.height)}</div>`;
+      row.insertCell(2).innerHTML = `<div class="${heightClass}" data-chain="${chainStatus.chain_id}" style="font-family: monospace; color: #6f6f6f; text-align: start">${_.escape(chainStatus.height)}</div>`;
       
       // Column 4: Moniker
       if (chainStatus.moniker === "not connected") {

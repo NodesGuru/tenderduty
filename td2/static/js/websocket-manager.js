@@ -28,6 +28,18 @@ export class WebSocketManager {
    * @private
    */
   _processMessage(event) {
+    // Debug: Log received messages
+    console.log('WebSocket message received:', event.data);
+    
+    try {
+      // Parse the message to check its structure
+      const data = JSON.parse(event.data);
+      console.log('Parsed message:', data);
+      console.log('Message type:', data.msgType);
+    } catch (error) {
+      console.error('Error parsing message:', error);
+    }
+    
     this.messageHandlers.forEach(handler => {
       try {
         handler(event);
@@ -43,23 +55,35 @@ export class WebSocketManager {
    * @private
    */
   _getWebSocketUrl() {
+    // Try both options to ensure compatibility with the original implementation
     const wsProtocol = location.protocol === 'https:' ? 'wss://' : 'ws://';
-    return `${wsProtocol}${location.host}/${API.WEBSOCKET}`;
     
-    // Uncomment for local development with hardcoded URL
-    // return `ws://127.0.0.1:8888/${API.WEBSOCKET}`;
+    // First try the original URL format
+    const wsUrl = `${wsProtocol}${location.host}/ws`;
+    console.log('WebSocket URL:', wsUrl);
+    
+    // For local development, uncomment the line below
+    // return 'ws://127.0.0.1:8888/ws';
+    
+    return wsUrl;
   }
 
   /**
    * Connect to WebSocket server
    */
   connect() {
+    if (this.socket && this.isConnected) {
+      console.log('Already connected to WebSocket');
+      return;
+    }
+    
     if (this.socket) {
       this.disconnect();
     }
 
     try {
       const url = this._getWebSocketUrl();
+      console.log('Connecting to WebSocket at:', url);
       this.socket = new WebSocket(url);
       
       // Set up event handlers
@@ -103,6 +127,7 @@ export class WebSocketManager {
    * @private
    */
   _scheduleReconnect() {
+    console.log(`Scheduling reconnect in ${this.reconnectTimeout}ms`);
     setTimeout(() => {
       console.log('Attempting to reconnect WebSocket...');
       this.connect();

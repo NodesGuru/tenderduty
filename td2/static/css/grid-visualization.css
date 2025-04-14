@@ -1,0 +1,256 @@
+/* Grid Visualization Styles */
+:root {
+  /* Light theme colors */
+  --light-text-color: #3f3f3f;
+  --light-background: #ffffff;
+  
+  /* Dark theme colors */
+  --dark-text-color: #b0b0b0;
+  --dark-background: #222222;
+  
+  /* Block status colors */
+  --color-proposed-start: rgb(123,255,66);
+  --color-proposed-mid: rgb(240,255,128);
+  --color-proposed-end: rgb(169,250,149);
+  
+  --color-empty-proposed-start: rgb(255,215,0);
+  --color-empty-proposed-mid: rgb(255,235,100);
+  --color-empty-proposed-end: rgb(255,223,66);
+  
+  --color-signed-even: rgba(0,0,0,0.4);
+  --color-signed-odd: rgba(0,0,0,0.1);
+  --color-signed-edge: rgb(186,186,186);
+  
+  --color-miss-precommit-start: #85c0f9;
+  --color-miss-precommit-end: #0b2641;
+  
+  --color-miss-prevote-start: #381a34;
+  --color-miss-prevote-end: #d06ec7;
+  
+  --color-missed: #c15600;
+  
+  --color-no-data: rgba(127,127,127,0.3);
+  
+  /* Grid dimensions */
+  --cell-height: 24px;
+  --cell-width: 9px;
+  --chain-label-width: 120px;
+}
+
+/* Theme-specific variables */
+body.uk-light {
+  --text-color: var(--dark-text-color);
+  --background: var(--dark-background);
+}
+
+body.uk-text-default {
+  --text-color: var(--light-text-color);
+  --background: var(--light-background);
+}
+
+/* Grid Container */
+.grid-visualization-container {
+  width: 100%;
+  overflow-x: auto;
+}
+
+#grid-container {
+  min-width: 100%;
+  padding: 10px 0;
+}
+
+/* Chain rows */
+.chain-row {
+  display: flex;
+  align-items: stretch;
+  margin-bottom: 2px;
+  height: var(--cell-height);
+}
+
+.chain-label {
+  flex: 0 0 var(--chain-label-width);
+  font-size: 16px;
+  color: var(--text-color);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-right: 10px;
+}
+
+.blocks-container {
+  display: flex;
+  flex: 1;
+  height: 100%;
+}
+
+/* Block cells */
+.block {
+  width: var(--cell-width);
+  height: 100%;
+  position: relative;
+  margin: 0 1px 0 0;
+}
+
+/* Block status styles (matching BLOCK_STATUS constants) */
+/* PROPOSED (4) */
+.block.status-proposed {
+  background: linear-gradient(to right,
+    var(--color-proposed-start),
+    var(--color-proposed-mid) 50%,
+    var(--color-proposed-end)
+  );
+}
+
+/* EMPTY_PROPOSED (5) */
+.block.status-empty-proposed {
+  background: linear-gradient(to right,
+    var(--color-empty-proposed-start),
+    var(--color-empty-proposed-mid) 50%,
+    var(--color-empty-proposed-end)
+  );
+}
+
+/* SIGNED (3) */
+.block.status-signed.even {
+  background: var(--color-signed-even);
+}
+
+.block.status-signed.odd {
+  background: var(--color-signed-odd);
+}
+
+/* PRECOMMIT_MISSED (2) */
+.block.status-miss-precommit {
+  background: linear-gradient(to bottom,
+    var(--color-miss-precommit-start) 80%,
+    var(--color-miss-precommit-end)
+  );
+}
+
+/* PREVOTE_MISSED (1) */
+.block.status-miss-prevote {
+  background: linear-gradient(to bottom,
+    var(--color-miss-prevote-end) 80%,
+    var(--color-miss-prevote-start)
+  );
+}
+
+/* MISSED (0) */
+.block.status-missed {
+  background: var(--color-missed);
+}
+
+/* NO_DATA (-1) */
+.block.status-no-data {
+  background: var(--color-no-data);
+}
+
+/* Line indicator for missed blocks */
+.block .block-line {
+  position: absolute;
+  top: 50%;
+  left: 1px;
+  right: 1px;
+  height: 1px;
+  background: white;
+}
+
+/* Line between blocks */
+.block:not(:first-child)::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 1px;
+  height: 100%;
+  background: rgba(51, 51, 51, 0.5);
+}
+
+/* Animation for height changes */
+.block-height-change {
+  animation: scale-up 0.3s ease-out;
+}
+
+@keyframes scale-up {
+  0% { transform: scale(0.9); opacity: 0.5; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+/* Legend styles */
+#legend-container {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin: 8px 0;
+  padding: 0 10px;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  margin: 0 10px;
+}
+
+.legend-block {
+  width: 6px;
+  height: 12px;
+  margin-right: 4px;
+  position: relative;
+}
+
+.legend-label {
+  font-size: 12px;
+  color: grey;
+}
+
+/* Legend status styles (same as block styles but smaller) */
+.legend-block.status-proposed {
+  background: linear-gradient(to right,
+    var(--color-proposed-start),
+    var(--color-proposed-mid) 50%,
+    var(--color-proposed-end)
+  );
+}
+
+.legend-block.status-empty-proposed {
+  background: linear-gradient(to right,
+    var(--color-empty-proposed-start),
+    var(--color-empty-proposed-mid) 50%,
+    var(--color-empty-proposed-end)
+  );
+}
+
+.legend-block.status-signed {
+  background: var(--color-signed-even);
+}
+
+.legend-block.status-miss-precommit {
+  background: linear-gradient(to bottom,
+    var(--color-miss-precommit-start) 80%,
+    var(--color-miss-precommit-end)
+  );
+}
+
+.legend-block.status-miss-prevote {
+  background: linear-gradient(to bottom,
+    var(--color-miss-prevote-end) 80%,
+    var(--color-miss-prevote-start)
+  );
+}
+
+.legend-block.status-missed {
+  background: var(--color-missed);
+}
+
+.legend-block.status-no-data {
+  background: var(--color-no-data);
+}
+
+.legend-line {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 0.5px;
+  background: white;
+} 
