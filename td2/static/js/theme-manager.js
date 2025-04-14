@@ -8,7 +8,7 @@ export class ThemeManager {
     
     // Elements that need theme switching
     this.body = document.body;
-    this.logElement = document.getElementById('logs');
+    // this.logElement = document.getElementById('logs'); // No longer needed, CSS handles log styling
     
     // Initialize theme based on body class
     this.isDark = this.body.classList.contains('uk-light');
@@ -45,8 +45,8 @@ export class ThemeManager {
     this.body.classList.remove('uk-text-default');
     this.body.classList.add('uk-background-secondary', 'uk-light');
     
-    // Update logs element
-    this.logElement.style = "background: #080808; height: 300px;";
+    // No need to update logs element directly, CSS handles it
+    // this.logElement.style = "background: #080808; height: 300px;";
   }
 
   /**
@@ -58,8 +58,8 @@ export class ThemeManager {
     this.body.classList.remove('uk-background-secondary', 'uk-light');
     this.body.classList.add('uk-text-default');
     
-    // Update logs element
-    this.logElement.style = "color: #0a0a0a; background: #dddddd; height: 300px;";
+    // No need to update logs element directly, CSS handles it
+    // this.logElement.style = "color: #0a0a0a; background: #dddddd; height: 300px;";
   }
 
   /**

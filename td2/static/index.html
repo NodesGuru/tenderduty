@@ -15,9 +15,10 @@
   <link rel="icon" href="favicon.png">
 </head>
 
+<!-- Start with dark theme classes -->
 <body class="uk-background-secondary uk-light">
 <div class="uk-container uk-width-expand uk-height-viewport">
-  <div class="uk-width-expand uk-overflow-auto uk-background-secondary" id="canvasDiv">
+  <div class="uk-width-expand uk-overflow-auto" id="canvasDiv">
     <div class="grid-visualization-container uk-padding-remove-horizontal">
       <!-- Grid visualization will be rendered here -->
       <div id="grid-container"></div>
@@ -56,7 +57,7 @@
     </div>
   </div>
 
-  <div class="uk-padding-small uk-text-small uk-background-secondary uk-overflow-auto" id="tableDiv">
+  <div class="uk-padding-small uk-text-small uk-overflow-auto" id="tableDiv">
     <table class="uk-table uk-table-small uk-table-justify uk-padding-remove">
       <thead>
       <tr>
@@ -76,7 +77,8 @@
   </div>
 
   <div class="uk-padding-large uk-padding-remove-top" id="logContainer">
-    <pre id="logs" class="uk-panel-scrollable uk-resize-vertical" style="background: #080808; height: 300px;"></pre>
+    <!-- Remove inline style, CSS will handle styling based on theme -->
+    <pre id="logs" class="uk-panel-scrollable uk-resize-vertical"></pre>
   </div>
 
   <div class="uk-text-small uk-text-center">

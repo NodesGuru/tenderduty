@@ -3,10 +3,14 @@
   /* Light theme colors */
   --light-text-color: #3f3f3f;
   --light-background: #ffffff;
+  --light-log-background: #dddddd;
+  --light-log-text-color: #0a0a0a;
   
   /* Dark theme colors */
   --dark-text-color: #b0b0b0;
   --dark-background: #222222;
+  --dark-log-background: #080808;
+  --dark-log-text-color: #b0b0b0; /* Same as general dark text */
   
   /* Block status colors */
   --color-proposed-start: rgb(123,255,66);
@@ -41,11 +45,28 @@
 body.uk-light {
   --text-color: var(--dark-text-color);
   --background: var(--dark-background);
+  --log-background: var(--dark-log-background);
+  --log-text-color: var(--dark-log-text-color);
 }
 
 body.uk-text-default {
   --text-color: var(--light-text-color);
   --background: var(--light-background);
+  --log-background: var(--light-log-background);
+  --log-text-color: var(--light-log-text-color);
+}
+
+/* Apply base background and text color */
+body {
+  background-color: var(--background);
+  color: var(--text-color);
+}
+
+/* Ensure containers also use the background */
+div#canvasDiv,
+div#tableDiv,
+div#legend-container {
+    background-color: var(--background);
 }
 
 /* Grid Container */
@@ -176,6 +197,22 @@ body.uk-text-default {
   100% { transform: scale(1); opacity: 1; }
 }
 
+/* Log area styles - Apply theme directly */
+#logs {
+  height: 300px; /* Keep the height */
+  font-family: monospace;
+}
+
+body.uk-light #logs {
+  background-color: var(--log-background);
+  color: var(--log-text-color);
+}
+
+body.uk-text-default #logs {
+  background-color: var(--log-background);
+  color: var(--log-text-color);
+}
+
 /* Legend styles */
 #legend-container {
   display: flex;
@@ -193,7 +230,7 @@ body.uk-text-default {
 
 .legend-block {
   width: 6px;
-  height: 12px;
+  height: 8px;
   margin-right: 4px;
   position: relative;
 }
