@@ -202,11 +202,27 @@ body {
 
 
 /* 7. Responsive Enhancements */
-.dashboard-container {
+
+/* Make the main viewport container a flex container */
+.uk-container.uk-height-viewport {
   display: flex;
-  flex-direction: column; /* Stack elements vertically by default */
-  gap: 16px; /* Space between elements */
-  margin-top: 16px; /* Added top margin */
+  flex-direction: column;
+  min-height: 100vh; /* Ensure it fills viewport height */
+  padding: 0; /* Remove default uk-container padding if it interferes */
+  box-sizing: border-box;
+  flex: initial !important; /* Override uk-width-expand's flex: 1 */
+}
+
+.dashboard-container {
+  display: flex; /* Keep internal flex for later */
+  flex-direction: column; /* Keep internal flex for later */
+  flex-grow: 1; /* Make this grow to push footer down */
+  /* Remove potentially conflicting styles for now */
+  /* gap: 16px; */
+  margin-top: 16px;
+  min-height: 0; /* Important for flex children */
+  padding: 0 16px; /* Apply padding only left/right */
+  box-sizing: border-box;
 }
 
 /* Adjust layout for wider screens */
@@ -224,21 +240,94 @@ body {
 }
 
 /* Ensure containers don't overflow */
-#tableDiv, #logContainerWrapper {
-  overflow: hidden; /* Prevent internal scrollbars unless needed */
-}
-#canvasDiv {
-  overflow: hidden; /* Revert: Prevent overflow, tooltip is portal */
-}
 #tableDiv {
   overflow-x: auto; /* Allow horizontal scroll for table on small screens */
+  flex-shrink: 0; /* Prevent table from shrinking */
 }
+#canvasDiv {
+   flex-shrink: 0; /* Prevent grid from shrinking */
+   overflow: hidden; 
+   flex: initial !important; /* Override uk-width-expand's flex: 1 */
+}
+
 #logContainerWrapper {
-  /* Specific flex sizing if needed */
+  flex-grow: 1; /* Make this container expand */
+  display: flex;
+  flex-direction: column;
+  min-height: 0; /* Prevent overflow */
+  overflow: hidden; /* Contain children */
+  padding-top: 10px; /* Add space above logs label */
+  padding-left: 0; /* Reset padding if needed */
+  padding-right: 0;
+  padding-bottom: 0;
+}
+
+/* Ensure the inner log container can grow */
+#logContainerWrapper .log-container {
+  flex-grow: 1;
+  display: flex; /* To make the pre element fill it */
+  min-height: 0;
+  /* Remove fixed max-height from original rule */
+  max-height: none; 
+  overflow: hidden; /* Let the #logs handle scroll */
+}
+
+/* Make the actual log display fill the container and scroll */
+#logs {
+  flex-grow: 1;
+  height: auto; /* Let flexbox determine height */
+  min-height: 0;
+  overflow-y: auto; /* Ensure vertical scrolling */
+  /* Remove uk-panel-scrollable if it interferes, or keep if needed */
+  /* border: 1px solid red; */ /* Debug border */
+}
+
+/* Style the log toggle label */
+.log-toggle-label {
+  cursor: pointer;
+  user-select: none;
+  display: block; /* Make it block level for better spacing */
+  margin-bottom: 5px; /* Space between label and logs */
+  font-weight: 500;
+  flex-shrink: 0; /* Prevent label from shrinking */
+}
+/* Update arrow indicator */
+.log-toggle-checkbox:not(:checked) + .log-toggle-label::after {
+  content: ' ▶'; /* Collapsed indicator */
+}
+.log-toggle-checkbox:checked + .log-toggle-label::after {
+  content: ' ▼'; /* Expanded indicator */
+}
+
+/* Hide log container when checkbox is not checked */
+.log-toggle-checkbox:not(:checked) ~ .log-container {
+  display: none; /* Simpler hiding */
+}
+
+/* Show log container when checkbox is checked */
+.log-toggle-checkbox:checked ~ .log-container {
+  display: flex; /* Ensure it's displayed as flex */
+}
+
+/* Row Hover Effects */
+#statusTableRoot tbody tr:hover {
+  background-color: rgba(255, 255, 255, 0.05);
+  transition: background-color 0.2s ease;
+}
+.uk-light #statusTableRoot tbody tr:hover {
+  background-color: rgba(255, 255, 255, 0.1); /* Slightly stronger hover for dark mode */
+}
+
+/* Prevent hover if row already has alert background */
+#statusTableRoot tbody tr.row-has-alert:hover {
+  background-color: rgba(255, 85, 85, 0.1);
+}
+.uk-light #statusTableRoot tbody tr.row-has-alert:hover {
+  background-color: rgba(255, 85, 85, 0.15);
 }
 
 
-/* Specific overrides for UIkit if necessary */
+/* 8. Specific overrides for UIkit if necessary */
 .uk-table-small th, .uk-table-small td {
   /* Override default small padding if needed, but we added our own above */
 }
@@ -273,4 +362,12 @@ body {
   white-space: normal !important;
   overflow: visible !important;
   text-overflow: clip !important;
+}
+
+/* Optional: Style the footer */
+/* Ensure footer selector is specific enough */
+.uk-container.uk-height-viewport > .uk-text-small.uk-text-center {
+  padding: 10px 16px; /* Add padding to footer */
+  flex-shrink: 0; /* Prevent footer from shrinking */
+  box-sizing: border-box;
 } 

@@ -27,10 +27,10 @@
   
   /* Grid dimensions - square blocks */
   --cell-height: 12px;
-  --cell-width: 12px;
+  --cell-width: 6px;
   --chain-label-width: 150px;
   --block-margin: 2px;
-  --block-border-radius: 3px;
+  --block-border-radius: 1px;
 }
 
 /* Theme-specific variables */
