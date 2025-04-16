@@ -63,7 +63,7 @@ export class WebSocketManager {
     console.log('WebSocket URL:', wsUrl);
     
     // For local development, uncomment the line below
-    // return 'ws://127.0.0.1:8888/ws';
+    return 'ws://127.0.0.1:8888/ws';
     
     return wsUrl;
   }
