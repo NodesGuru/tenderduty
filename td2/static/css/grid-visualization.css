@@ -12,24 +12,25 @@
   --dark-log-background: #080808;
   --dark-log-text-color: #b0b0b0; /* Same as general dark text */
   
-  /* Block status colors - Updated for semantic consistency */
-  --color-proposed: #90EE90; /* LightGreen */
-  --color-empty-proposed: #2E8B57; /* SeaGreen */
+  /* Block status colors - Inspired by GitHub/Linear */
+  --color-signed: #d6f5d6; /* Pale Green */
+  --color-proposed: #40c463; /* Leafy Green */
+  --color-empty-proposed: #9be9a8; /* Medium Pale Green */
   
-  --color-signed-even: rgba(0,0,0,0.4); /* Keep original */
-  --color-signed-odd: rgba(0,0,0,0.1); /* Keep original */
-  --color-signed-edge: rgb(186,186,186); /* Keep original */
+  --color-miss-prevote: #FFDB58; /* Mustard Yellow */
+  --color-miss-precommit: #FFA500; /* Orange */
+  --color-missed: #d73a49; /* GitHub-like error red */
   
-  --color-miss-precommit: #FFA07A; /* LightSalmon (Light Red) */
-  --color-miss-prevote: #F08080; /* LightCoral (Medium Red) */
-  --color-missed: #DC143C; /* Crimson (Dark Red) */
+  /* Separate No Data colors for themes */
+  --color-no-data-light: #ebedf0; /* GitHub light no-data */
+  --color-no-data-dark: #30363d;  /* GitHub dark no-data */
   
-  --color-no-data: #808080; /* Gray */
-  
-  /* Grid dimensions */
-  --cell-height: 24px;
-  --cell-width: 9px;
+  /* Grid dimensions - square blocks */
+  --cell-height: 12px;
+  --cell-width: 12px;
   --chain-label-width: 150px;
+  --block-margin: 2px;
+  --block-border-radius: 3px;
 }
 
 /* Theme-specific variables */
@@ -38,6 +39,8 @@ body.uk-light {
   --background: var(--dark-background);
   --log-background: var(--dark-log-background);
   --log-text-color: var(--dark-log-text-color);
+  --color-no-data: var(--color-no-data-dark); /* Use dark no-data */
+  --color-signed: rgba(64, 196, 99, 0.3); /* Low opacity green for dark mode */
 }
 
 body.uk-text-default {
@@ -45,6 +48,7 @@ body.uk-text-default {
   --background: var(--light-background);
   --log-background: var(--light-log-background);
   --log-text-color: var(--light-log-text-color);
+  --color-no-data: var(--color-no-data-light); /* Use light no-data */
 }
 
 /* Apply base background and text color */
@@ -76,20 +80,20 @@ div#legend-container {
 /* Chain rows */
 .chain-row {
   display: flex;
-  align-items: stretch;
-  margin-bottom: 2px;
-  height: var(--cell-height);
+  align-items: center; /* Center items vertically */
+  margin-bottom: var(--block-margin); /* Use variable */
+  height: auto; /* Let height be determined by content */
 }
 
 .chain-label {
   flex: 0 0 var(--chain-label-width);
-  font-size: 16px;
+  font-size: 14px; /* Slightly smaller */
   color: var(--text-color);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   padding-right: 10px;
-  line-height: var(--cell-height);
+  line-height: var(--cell-height); /* Align with block height */
   position: relative;
 }
 
@@ -127,14 +131,20 @@ div#legend-container {
 /* Block cells */
 .block {
   width: var(--cell-width);
-  height: 100%;
+  height: var(--cell-height);
   position: relative;
-  margin: 0 1px 0 0;
-  box-sizing: border-box; /* Include padding/border in size */
-  outline: 1px solid transparent; /* Prepare for hover outline */
-  outline-offset: -1px; /* Draw outline inside the border */
-  transition: outline-color 0.2s ease; /* Transition for outline */
-  z-index: 999;
+  margin: var(--block-margin);
+  border-radius: var(--block-border-radius);
+  box-sizing: border-box; 
+  transition: transform 0.1s ease-in-out; /* For hover effect */
+  z-index: 1; /* Lower z-index */
+  /* Remove outline properties */
+}
+
+/* Subtle hover effect */
+.block:hover {
+  transform: scale(1.2);
+  z-index: 2;
 }
 
 /* Block status styles (matching BLOCK_STATUS constants) */
@@ -148,14 +158,11 @@ div#legend-container {
   background: var(--color-empty-proposed);
 }
 
-/* SIGNED (3) */
-.block.status-signed.even {
-  background: var(--color-signed-even);
+/* SIGNED (3) - Use single color, maybe differentiate odd/even later if needed */
+.block.status-signed {
+  background: var(--color-signed);
 }
-
-.block.status-signed.odd {
-  background: var(--color-signed-odd);
-}
+/* Remove odd/even specific rules */
 
 /* PRECOMMIT_MISSED (2) */
 .block.status-miss-precommit {
@@ -174,29 +181,14 @@ div#legend-container {
 
 /* NO_DATA (-1) */
 .block.status-no-data {
-  background: var(--color-no-data);
+  background: var(--color-no-data); /* Uses theme-specific variable */
 }
 
-/* Line indicator for missed blocks */
-.block .block-line {
-  position: absolute;
-  top: 50%;
-  left: 1px;
-  right: 1px;
-  height: 1px;
-  background: white;
-}
+/* Line indicator for missed blocks - Remove or adapt? Let's remove for now. */
+/* .block .block-line { ... } */
 
-/* Line between blocks */
-.block:not(:first-child)::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: 1px;
-  height: 100%;
-  background: rgba(51, 51, 51, 0.5);
-}
+/* Line between blocks - Remove, using margin now */
+/* .block:not(:first-child)::before { ... } */
 
 /* Animation for height changes */
 .block-height-change {
@@ -236,21 +228,22 @@ body.uk-text-default #logs {
 .legend-item {
   display: flex;
   align-items: center;
-  margin: 0 10px;
+  margin: 0 8px; /* Adjust spacing */
 }
 
 .legend-block {
   width: var(--cell-width);
   height: var(--cell-height);
+  border-radius: var(--block-border-radius);
   display: inline-block;
   vertical-align: middle;
   margin-right: 5px;
-  position: relative; /* For the line inside missed blocks */
+  position: relative; /* For the line inside missed blocks if re-added */
 }
 
 .legend-label {
   vertical-align: middle;
-  font-size: 0.9em;
+  font-size: 0.85em; /* Slightly smaller */
   position: relative; /* For tooltip */
 }
 
@@ -263,9 +256,9 @@ body.uk-text-default #logs {
   background: var(--color-empty-proposed);
 }
 
-/* Signed Legend - Using odd color for simplicity */
+/* Signed Legend - Use base signed color */
 .legend-block.status-signed {
-  background: var(--color-signed-odd);
+  background: var(--color-signed);
 }
 
 .legend-block.status-miss-precommit {
@@ -282,16 +275,6 @@ body.uk-text-default #logs {
 
 .legend-block.status-no-data {
   background: var(--color-no-data);
-}
-
-/* Line for missed legend block */
-.legend-line {
-  position: absolute;
-  top: 50%;
-  left: 1px;
-  right: 1px;
-  height: 1px;
-  background: white; /* Ensure line is visible */
 }
 
 /* Responsive adjustments */
