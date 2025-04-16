@@ -1,0 +1,276 @@
+/* Custom Styles for Tenderduty Dashboard */
+
+/* General & Body */
+body {
+  color: #ddd; /* Increased contrast from default light theme */
+}
+
+/* Dark theme adjustments */
+.uk-light body {
+  color: #ddd; /* Ensure contrast in dark mode */
+}
+.uk-light .uk-table th,
+.uk-light .uk-table td {
+  color: #ddd; /* Ensure table text is visible in dark mode */
+}
+.uk-light .uk-link-muted {
+  color: #ccc; /* Adjust link color for dark mode */
+}
+.uk-light .log-toggle-label {
+  color: #eee;
+}
+
+/* 1. Layout and Spacing */
+#statusTableRoot .uk-table th,
+#statusTableRoot .uk-table td {
+  padding-top: 12px;    /* Increased vertical padding */
+  padding-bottom: 12px; /* Increased vertical padding */
+  vertical-align: middle;
+}
+
+#statusTableRoot tbody tr {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1); /* Subtle row separator */
+}
+/* Remove border from last row */
+#statusTableRoot tbody tr:last-child {
+  border-bottom: none;
+}
+
+#statusTableRoot thead th {
+  font-weight: 600;
+  text-transform: uppercase;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.3); /* Header separator */
+}
+.uk-light #statusTableRoot thead th {
+   border-bottom-color: rgba(255, 255, 255, 0.3); /* Ensure visibility in dark mode */
+}
+
+/* 2. Status Squares & Legends */
+/* Persistent legend is already in HTML */
+
+/* CSS Tooltips for Legend Items */
+.legend-item {
+  position: relative;
+  display: inline-flex; /* Align items nicely */
+  align-items: center;
+  margin-right: 10px; /* Spacing between legend items */
+}
+
+.legend-item .legend-label::before {
+  content: attr(data-tooltip); /* Use data-tooltip attribute for text */
+  position: absolute;
+  bottom: 100%; /* Position above the element */
+  left: 50%;
+  transform: translateX(-50%) translateY(-5px); /* Center and add spacing */
+  background-color: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.8em;
+  white-space: nowrap;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.3s ease, visibility 0.3s ease;
+  z-index: 10;
+}
+
+.legend-item:hover .legend-label::before {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* Add tooltip content via JS or directly in HTML if static */
+/* Example: <span class="legend-label" data-tooltip="Validator Proposed Block">proposer</span> */
+
+
+/* 3. Alerts & Notifications */
+@keyframes pulse {
+  0% { opacity: 0.6; box-shadow: 0 0 0 0 rgba(255, 165, 0, 0.7); } /* Orange glow */
+  50% { opacity: 1; box-shadow: 0 0 0 5px rgba(255, 165, 0, 0); }
+  100% { opacity: 0.6; box-shadow: 0 0 0 0 rgba(255, 165, 0, 0); }
+}
+
+.alert-icon {
+  color: darkorange;
+  transition: color 0.3s ease; /* Add transition */
+}
+
+.alert-active .alert-icon { /* Target icon within the active alert container */
+  color: darkorange !important; /* Ensure color override */
+  animation: pulse 2s infinite;
+}
+
+/* Highlight problematic rows */
+#statusTableRoot tbody tr.row-has-alert {
+  background-color: rgba(255, 85, 85, 0.1); /* Soft red background */
+}
+.uk-light #statusTableRoot tbody tr.row-has-alert {
+  background-color: rgba(255, 85, 85, 0.15); /* Slightly adjusted for dark mode */
+}
+
+
+/* 4. Interactive Elements */
+
+/* Collapsible Logs Section */
+.log-container {
+  max-height: 250px; /* Default open height */
+  overflow: auto;
+  transition: max-height 0.4s ease, opacity 0.3s ease, padding 0.3s ease;
+  border-radius: 4px; /* Match logs-box */
+}
+
+.log-toggle-checkbox:not(:checked) ~ .log-container {
+  max-height: 0;
+  opacity: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  border: none;
+  overflow: hidden;
+}
+
+.log-toggle-label {
+  cursor: pointer;
+  user-select: none;
+  display: block; /* Make it block level for better spacing */
+  margin-bottom: 5px; /* Space between label and logs */
+  font-weight: 500;
+}
+/* Update arrow indicator */
+.log-toggle-checkbox:not(:checked) + .log-toggle-label::after {
+  content: ' ▶'; /* Collapsed indicator */
+}
+.log-toggle-checkbox:checked + .log-toggle-label::after {
+  content: ' ▼'; /* Expanded indicator */
+}
+
+
+/* Row Hover Effects */
+#statusTableRoot tbody tr:hover {
+  background-color: rgba(255, 255, 255, 0.05);
+  transition: background-color 0.2s ease;
+}
+.uk-light #statusTableRoot tbody tr:hover {
+  background-color: rgba(255, 255, 255, 0.1); /* Slightly stronger hover for dark mode */
+}
+
+/* Prevent hover if row already has alert background */
+#statusTableRoot tbody tr.row-has-alert:hover {
+  background-color: rgba(255, 85, 85, 0.1);
+}
+.uk-light #statusTableRoot tbody tr.row-has-alert:hover {
+  background-color: rgba(255, 85, 85, 0.15);
+}
+
+
+/* 5. Typography and Accessibility */
+#statusTableRoot td.numeric-data {
+  font-size: calc(1em + 1px); /* Slightly larger font size */
+}
+/* Monospace for height */
+#statusTableRoot td.height-data {
+  font-family: 'JetBrains Mono', Consolas, monaco, monospace;
+  font-size: calc(1em + 1px);
+  color: #888; /* Subtle color */
+}
+.uk-light #statusTableRoot td.height-data {
+   color: #999;
+}
+
+
+/* 6. Micro-interactions and Visual Delights */
+/* General transitions for interactive elements */
+.status-square, .alert-icon, .legend-block {
+  transition: all 0.3s ease;
+}
+
+/* Terminal Logs Styling */
+.logs-box {
+  font-family: 'JetBrains Mono', 'IBM Plex Mono', Consolas, monaco, monospace;
+  line-height: 1.4;
+  background-color: rgba(0, 0, 0, 0.1); /* Lighter background for light mode */
+  color: #333; /* Darker text for light mode */
+  padding: 15px;
+  border-radius: 4px;
+  border: 1px solid rgba(0,0,0,0.1);
+}
+
+.uk-light .logs-box {
+  background-color: rgba(0, 0, 0, 0.3); /* Spec background for dark mode */
+  color: #eee; /* Light text for dark mode */
+  border: 1px solid rgba(255,255,255,0.1);
+}
+
+
+/* 7. Responsive Enhancements */
+.dashboard-container {
+  display: flex;
+  flex-direction: column; /* Stack elements vertically by default */
+  gap: 16px; /* Space between elements */
+  margin-top: 16px; /* Added top margin */
+}
+
+/* Adjust layout for wider screens */
+@media (min-width: 960px) { /* Using UIKit's medium breakpoint */
+  .dashboard-container {
+    /* Arrange in potentially two columns or keep flexible */
+    /* Example: Allow items to wrap if needed */
+     /* flex-direction: row; */ /* Uncomment if side-by-side is desired */
+     /* flex-wrap: wrap; */
+  }
+  /* Example: give table more prominence */
+  #tableDiv {
+     /* flex-grow: 1; */
+  }
+}
+
+/* Ensure containers don't overflow */
+#tableDiv, #logContainerWrapper {
+  overflow: hidden; /* Prevent internal scrollbars unless needed */
+}
+#canvasDiv {
+  overflow: hidden; /* Revert: Prevent overflow, tooltip is portal */
+}
+#tableDiv {
+  overflow-x: auto; /* Allow horizontal scroll for table on small screens */
+}
+#logContainerWrapper {
+  /* Specific flex sizing if needed */
+}
+
+
+/* Specific overrides for UIkit if necessary */
+.uk-table-small th, .uk-table-small td {
+  /* Override default small padding if needed, but we added our own above */
+}
+
+/* Height Animation Class */
+.block-height-change {
+    animation: height-flash 0.7s ease-out;
+}
+
+@keyframes height-flash {
+    0% { background-color: rgba(0, 150, 255, 0.3); }
+    100% { background-color: transparent; }
+}
+.uk-light .block-height-change {
+    animation: height-flash-dark 0.7s ease-out;
+}
+@keyframes height-flash-dark {
+    0% { background-color: rgba(0, 150, 255, 0.4); }
+    100% { background-color: transparent; }
+}
+
+/* Ensure table cells wrap text instead of truncating */
+#statusTableRoot td {
+  white-space: normal; /* Allow wrapping */
+  overflow-wrap: break-word; /* Break long words */
+  word-wrap: break-word; /* Legacy support */
+  max-width: 200px; /* Optional: constrain max width if needed */
+}
+
+/* Remove truncation specifically from moniker if previously applied by JS */
+#statusTableRoot td .uk-text-truncate {
+  white-space: normal !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+} 

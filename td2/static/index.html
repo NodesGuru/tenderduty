@@ -6,10 +6,12 @@
   <meta name="robots" content="noindex">
   <link rel="stylesheet" href="css/uikit.min.css" />
   <link rel="stylesheet" href="css/grid-visualization.css" />
+  <link rel="stylesheet" href="css/custom-styles.css" />
   <title>Tenderduty Dashboard</title>
   <script src="js/uikit.min.js"></script>
   <script src="./js/uikit-icons.min.js"></script>
   <script src="./js/lodash.min.js"></script>
+
   <!-- Load app using ES modules -->
   <script type="module" src="js/app.js"></script>
   <link rel="icon" href="favicon.png">
@@ -18,67 +20,78 @@
 <!-- Start with dark theme classes -->
 <body class="uk-background-secondary uk-light">
 <div class="uk-container uk-width-expand uk-height-viewport">
-  <div class="uk-width-expand uk-overflow-auto" id="canvasDiv">
-    <div class="grid-visualization-container uk-padding-remove-horizontal">
-      <!-- Grid visualization will be rendered here -->
-      <div id="grid-container"></div>
-      
-      <!-- Legend -->
-      <div id="legend-container" class="uk-nav-center uk-padding-remove">
-        <div class="legend-item">
-          <div class="legend-block status-proposed"></div>
-          <span class="legend-label">proposer</span>
-        </div>
-        <div class="legend-item">
-          <div class="legend-block status-empty-proposed"></div>
-          <span class="legend-label">proposer/empty</span>
-        </div>
-        <div class="legend-item">
-          <div class="legend-block status-signed"></div>
-          <span class="legend-label">signed</span>
-        </div>
-        <div class="legend-item">
-          <div class="legend-block status-miss-precommit"></div>
-          <span class="legend-label">miss/precommit</span>
-        </div>
-        <div class="legend-item">
-          <div class="legend-block status-miss-prevote"></div>
-          <span class="legend-label">miss/prevote</span>
-        </div>
-        <div class="legend-item">
-          <div class="legend-block status-missed"><div class="legend-line"></div></div>
-          <span class="legend-label">missed</span>
-        </div>
-        <div class="legend-item">
-          <div class="legend-block status-no-data"></div>
-          <span class="legend-label">no data</span>
+
+  <!-- Main content wrapper for layout -->
+  <div class="dashboard-container">
+
+    <div class="uk-width-expand uk-overflow-auto" id="canvasDiv">
+      <div class="grid-visualization-container uk-padding-remove-horizontal">
+        <!-- Grid visualization will be rendered here -->
+        <div id="grid-container"></div>
+        
+        <!-- Legend -->
+        <div id="legend-container" class="uk-nav-center uk-padding-remove">
+          <div class="legend-item">
+            <div class="legend-block status-proposed"></div>
+            <span class="legend-label" data-tooltip="Validator proposed this block">proposer</span>
+          </div>
+          <div class="legend-item">
+            <div class="legend-block status-empty-proposed"></div>
+            <span class="legend-label" data-tooltip="Validator proposed an empty block">proposer/empty</span>
+          </div>
+          <div class="legend-item">
+            <div class="legend-block status-signed"></div>
+            <span class="legend-label" data-tooltip="Validator signed this block">signed</span>
+          </div>
+          <div class="legend-item">
+            <div class="legend-block status-miss-precommit"></div>
+            <span class="legend-label" data-tooltip="Validator missed precommit">miss/precommit</span>
+          </div>
+          <div class="legend-item">
+            <div class="legend-block status-miss-prevote"></div>
+            <span class="legend-label" data-tooltip="Validator missed prevote">miss/prevote</span>
+          </div>
+          <div class="legend-item">
+            <div class="legend-block status-missed"><div class="legend-line"></div></div>
+            <span class="legend-label" data-tooltip="Validator missed this block">missed</span>
+          </div>
+          <div class="legend-item">
+            <div class="legend-block status-no-data"></div>
+            <span class="legend-label" data-tooltip="No data available for this block">no data</span>
+          </div>
         </div>
       </div>
     </div>
-  </div>
 
-  <div class="uk-padding-small uk-text-small uk-overflow-auto" id="tableDiv">
-    <table class="uk-table uk-table-small uk-table-justify uk-padding-remove">
-      <thead>
-      <tr>
-        <th></th>
-        <th>Chain</th>
-        <th>Height</th>
-        <th>Moniker</th>
-        <th style="text-align: center">Bonded</th>
-        <th class="uk-text-center">Unvoted Proposals</th>
-        <th class="uk-text-center">Uptime</th>
-        <th class="uk-text-center">Threshold</th>
-        <th class="uk-text-center">RPC Nodes</th>
-      </tr>
-      </thead>
-      <tbody id="statusTable"></tbody>
-    </table>
-  </div>
+    <div class="uk-padding-small uk-text-small uk-overflow-auto" id="tableDiv">
+      <table class="uk-table uk-table-small uk-table-justify uk-padding-remove" id="statusTableRoot">
+        <thead>
+        <tr>
+          <th></th>
+          <th>Chain</th>
+          <th>Height</th>
+          <th>Moniker</th>
+          <th style="text-align: center">Bonded</th>
+          <th class="uk-text-center">Unvoted Proposals</th>
+          <th class="uk-text-center">Uptime</th>
+          <th class="uk-text-center">Threshold</th>
+          <th class="uk-text-center">RPC Nodes</th>
+        </tr>
+        </thead>
+        <tbody id="statusTable"></tbody>
+      </table>
+    </div>
 
-  <div class="uk-padding-large uk-padding-remove-top" id="logContainer">
-    <!-- Remove inline style, CSS will handle styling based on theme -->
-    <pre id="logs" class="uk-panel-scrollable uk-resize-vertical"></pre>
+    <!-- Collapsible Logs Section -->
+    <div class="uk-padding-large uk-padding-remove-top" id="logContainerWrapper">
+      <input type="checkbox" id="log-toggle" class="log-toggle-checkbox" hidden checked>
+      <label for="log-toggle" class="log-toggle-label">Logs</label>
+      <div class="log-container">
+        <!-- Remove inline style, CSS will handle styling based on theme -->
+        <pre id="logs" class="uk-panel-scrollable uk-resize-vertical logs-box"></pre>
+      </div>
+    </div>
+
   </div>
 
   <div class="uk-text-small uk-text-center">

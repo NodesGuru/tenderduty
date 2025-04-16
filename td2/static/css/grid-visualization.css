@@ -12,33 +12,24 @@
   --dark-log-background: #080808;
   --dark-log-text-color: #b0b0b0; /* Same as general dark text */
   
-  /* Block status colors */
-  --color-proposed-start: rgb(123,255,66);
-  --color-proposed-mid: rgb(240,255,128);
-  --color-proposed-end: rgb(169,250,149);
+  /* Block status colors - Updated for semantic consistency */
+  --color-proposed: #90EE90; /* LightGreen */
+  --color-empty-proposed: #2E8B57; /* SeaGreen */
   
-  --color-empty-proposed-start: rgb(255,215,0);
-  --color-empty-proposed-mid: rgb(255,235,100);
-  --color-empty-proposed-end: rgb(255,223,66);
+  --color-signed-even: rgba(0,0,0,0.4); /* Keep original */
+  --color-signed-odd: rgba(0,0,0,0.1); /* Keep original */
+  --color-signed-edge: rgb(186,186,186); /* Keep original */
   
-  --color-signed-even: rgba(0,0,0,0.4);
-  --color-signed-odd: rgba(0,0,0,0.1);
-  --color-signed-edge: rgb(186,186,186);
+  --color-miss-precommit: #FFA07A; /* LightSalmon (Light Red) */
+  --color-miss-prevote: #F08080; /* LightCoral (Medium Red) */
+  --color-missed: #DC143C; /* Crimson (Dark Red) */
   
-  --color-miss-precommit-start: #85c0f9;
-  --color-miss-precommit-end: #0b2641;
-  
-  --color-miss-prevote-start: #381a34;
-  --color-miss-prevote-end: #d06ec7;
-  
-  --color-missed: #c15600;
-  
-  --color-no-data: rgba(127,127,127,0.3);
+  --color-no-data: #808080; /* Gray */
   
   /* Grid dimensions */
   --cell-height: 24px;
   --cell-width: 9px;
-  --chain-label-width: 120px;
+  --chain-label-width: 150px;
 }
 
 /* Theme-specific variables */
@@ -73,11 +64,13 @@ div#legend-container {
 .grid-visualization-container {
   width: 100%;
   overflow-x: auto;
+  overflow: visible;
 }
 
 #grid-container {
   min-width: 100%;
   padding: 10px 0;
+  overflow: visible; /* Allow tooltips to overflow */
 }
 
 /* Chain rows */
@@ -96,6 +89,33 @@ div#legend-container {
   overflow: hidden;
   text-overflow: ellipsis;
   padding-right: 10px;
+  line-height: var(--cell-height);
+  position: relative;
+}
+
+/* Chain Label Tooltip */
+.chain-label::before {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  transform: translateY(-3px);
+  background-color: rgba(0, 0, 0, 0.85);
+  color: white;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.85em;
+  white-space: nowrap;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s ease, visibility 0.2s ease;
+  z-index: 25;
+  pointer-events: none;
+}
+
+.chain-label:hover::before {
+  opacity: 1;
+  visibility: visible;
 }
 
 .blocks-container {
@@ -110,25 +130,22 @@ div#legend-container {
   height: 100%;
   position: relative;
   margin: 0 1px 0 0;
+  box-sizing: border-box; /* Include padding/border in size */
+  outline: 1px solid transparent; /* Prepare for hover outline */
+  outline-offset: -1px; /* Draw outline inside the border */
+  transition: outline-color 0.2s ease; /* Transition for outline */
+  z-index: 999;
 }
 
 /* Block status styles (matching BLOCK_STATUS constants) */
 /* PROPOSED (4) */
 .block.status-proposed {
-  background: linear-gradient(to right,
-    var(--color-proposed-start),
-    var(--color-proposed-mid) 50%,
-    var(--color-proposed-end)
-  );
+  background: var(--color-proposed);
 }
 
 /* EMPTY_PROPOSED (5) */
 .block.status-empty-proposed {
-  background: linear-gradient(to right,
-    var(--color-empty-proposed-start),
-    var(--color-empty-proposed-mid) 50%,
-    var(--color-empty-proposed-end)
-  );
+  background: var(--color-empty-proposed);
 }
 
 /* SIGNED (3) */
@@ -142,18 +159,12 @@ div#legend-container {
 
 /* PRECOMMIT_MISSED (2) */
 .block.status-miss-precommit {
-  background: linear-gradient(to bottom,
-    var(--color-miss-precommit-start) 80%,
-    var(--color-miss-precommit-end)
-  );
+  background: var(--color-miss-precommit);
 }
 
 /* PREVOTE_MISSED (1) */
 .block.status-miss-prevote {
-  background: linear-gradient(to bottom,
-    var(--color-miss-prevote-end) 80%,
-    var(--color-miss-prevote-start)
-  );
+  background: var(--color-miss-prevote);
 }
 
 /* MISSED (0) */
@@ -229,50 +240,40 @@ body.uk-text-default #logs {
 }
 
 .legend-block {
-  width: 6px;
-  height: 8px;
-  margin-right: 4px;
-  position: relative;
+  width: var(--cell-width);
+  height: var(--cell-height);
+  display: inline-block;
+  vertical-align: middle;
+  margin-right: 5px;
+  position: relative; /* For the line inside missed blocks */
 }
 
 .legend-label {
-  font-size: 12px;
-  color: grey;
+  vertical-align: middle;
+  font-size: 0.9em;
+  position: relative; /* For tooltip */
 }
 
-/* Legend status styles (same as block styles but smaller) */
+/* Apply status colors to legend blocks */
 .legend-block.status-proposed {
-  background: linear-gradient(to right,
-    var(--color-proposed-start),
-    var(--color-proposed-mid) 50%,
-    var(--color-proposed-end)
-  );
+  background: var(--color-proposed);
 }
 
 .legend-block.status-empty-proposed {
-  background: linear-gradient(to right,
-    var(--color-empty-proposed-start),
-    var(--color-empty-proposed-mid) 50%,
-    var(--color-empty-proposed-end)
-  );
+  background: var(--color-empty-proposed);
 }
 
+/* Signed Legend - Using odd color for simplicity */
 .legend-block.status-signed {
-  background: var(--color-signed-even);
+  background: var(--color-signed-odd);
 }
 
 .legend-block.status-miss-precommit {
-  background: linear-gradient(to bottom,
-    var(--color-miss-precommit-start) 80%,
-    var(--color-miss-precommit-end)
-  );
+  background: var(--color-miss-precommit);
 }
 
 .legend-block.status-miss-prevote {
-  background: linear-gradient(to bottom,
-    var(--color-miss-prevote-end) 80%,
-    var(--color-miss-prevote-start)
-  );
+  background: var(--color-miss-prevote);
 }
 
 .legend-block.status-missed {
@@ -283,11 +284,24 @@ body.uk-text-default #logs {
   background: var(--color-no-data);
 }
 
+/* Line for missed legend block */
 .legend-line {
   position: absolute;
   top: 50%;
-  left: 0;
-  right: 0;
-  height: 0.5px;
-  background: white;
+  left: 1px;
+  right: 1px;
+  height: 1px;
+  background: white; /* Ensure line is visible */
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .grid-visualization-container {
+    overflow-x: scroll; /* Enable horizontal scrolling on smaller screens */
+  }
+}
+
+/* Ensure grid container allows overflow for tooltips if needed */
+.grid-visualization-container {
+  overflow: visible; /* Or adjust padding */
 } 

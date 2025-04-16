@@ -53,6 +53,7 @@ export class GridRenderer {
       const label = document.createElement('div');
       label.className = 'chain-label';
       label.textContent = chainStatus.name;
+      label.setAttribute('data-tooltip', chainStatus.name);
       row.appendChild(label);
       
       // Create blocks container
@@ -81,8 +82,14 @@ export class GridRenderer {
       }
       
       // Add individual blocks
+      const blockDataLength = blockData.length;
       blockData.forEach((blockStatus, blockIndex) => {
-        const block = this._createBlockElement(blockStatus, chainIndex, blockIndex);
+        // Calculate actual block number assuming array is ordered oldest to newest
+        const actualBlockNumber = chainStatus.height 
+          ? chainStatus.height - (blockDataLength - 1 - blockIndex) 
+          : blockIndex + 1; // Fallback if height is missing
+        
+        const block = this._createBlockElement(blockStatus, chainIndex, blockIndex, actualBlockNumber);
         blocksContainer.appendChild(block);
       });
       
@@ -102,38 +109,49 @@ export class GridRenderer {
    * Create a single block element
    * @param {number} status - Block status code
    * @param {number} chainIndex - Index of the chain
-   * @param {number} blockIndex - Index of the block
+   * @param {number} blockIndex - Index of the block within the displayed array
+   * @param {number} actualBlockNumber - The actual block height number
    * @returns {HTMLElement} Block element
    * @private
    */
-  _createBlockElement(status, chainIndex, blockIndex) {
+  _createBlockElement(status, chainIndex, blockIndex, actualBlockNumber) {
     const block = document.createElement('div');
     block.className = 'block';
     
     // Convert status to number if it's a string
     const blockStatus = parseInt(status);
+    let tooltipText = 'Unknown status';
     
-    // Apply status-specific class
+    // Base status text
+    let statusText = 'Unknown';
+    
+    // Apply status-specific class and set tooltip text
     switch (blockStatus) {
       case BLOCK_STATUS.PROPOSED: // 4
         block.classList.add('status-proposed');
+        statusText = 'Proposed';
         break;
       case BLOCK_STATUS.EMPTY_PROPOSED: // 5
         block.classList.add('status-empty-proposed');
+        statusText = 'Proposed (Empty)';
         break;
       case BLOCK_STATUS.SIGNED: // 3
         block.classList.add('status-signed');
+        statusText = 'Signed';
         // Different styling for even/odd rows
         block.classList.add(chainIndex % 2 === 0 ? 'even' : 'odd');
         break;
       case BLOCK_STATUS.PRECOMMIT_MISSED: // 2
         block.classList.add('status-miss-precommit');
+        statusText = 'Missed Precommit';
         break;
       case BLOCK_STATUS.PREVOTE_MISSED: // 1
         block.classList.add('status-miss-prevote');
+        statusText = 'Missed Prevote';
         break;
       case BLOCK_STATUS.MISSED: // 0
         block.classList.add('status-missed');
+        statusText = 'Missed';
         // Add white line for missed blocks
         const line = document.createElement('div');
         line.className = 'block-line';
@@ -142,7 +160,16 @@ export class GridRenderer {
       default:
         console.log('Unknown block status:', status);
         block.classList.add('status-no-data');
+        statusText = 'No Data';
     }
+    
+    // Combine actual block number and status text for tooltip
+    tooltipText = `Block ${actualBlockNumber}: ${statusText}`;
+    
+    // REMOVED: Add tooltip attribute
+    // block.setAttribute('data-tooltip', tooltipText);
+    // DEBUG: Verify tooltip attribute is set
+    //console.log('Set tooltip for block:', blockIndex, ':', block.getAttribute('data-tooltip'));
     
     return block;
   }

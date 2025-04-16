@@ -33,9 +33,14 @@ export class TableRenderer {
       return '&nbsp;';
     }
     
+    // Add the alert-active class to the container div for pulsing effect
+    const alertContainerClass = 'alert-active';
+
     if (status.last_error !== '') {
       return `
-        <a href="#modal-center-${status.name}" uk-toggle><span uk-icon='warning' uk-tooltip="${_.escape(status.active_alerts)} active issues" style='color: darkorange'></span></a>
+        <div class="${alertContainerClass}">
+          <a href="#modal-center-${status.name}" uk-toggle><span class="alert-icon" uk-icon='warning' uk-tooltip="${_.escape(status.active_alerts)} active issues"></span></a>
+        </div>
         <div id="modal-center-${_.escape(status.name)}" class="uk-flex-top" uk-modal>
             <div class="uk-modal-dialog uk-modal-body uk-margin-auto-vertical uk-background-secondary">
                 <button class="uk-modal-close-default" type="button" uk-close></button>
@@ -44,7 +49,7 @@ export class TableRenderer {
         </div>
       `;
     } else {
-      return `<span uk-icon='warning' uk-tooltip="${_.escape(status.active_alerts)} active issues" style='color: darkorange'></span>`;
+      return `<div class="${alertContainerClass}"><span class="alert-icon" uk-icon='warning' uk-tooltip="${_.escape(status.active_alerts)} active issues"></span></div>`;
     }
   }
 
@@ -144,6 +149,11 @@ export class TableRenderer {
       const chainStatus = status.Status[i];
       const row = this.statusTable.insertRow(i);
       
+      // Add class to row if there are alerts or errors
+      if (chainStatus.active_alerts > 0 || chainStatus.last_error !== '') {
+        row.classList.add('row-has-alert');
+      }
+      
       // Column 1: Alerts
       row.insertCell(0).innerHTML = `<div>${this._createAlerts(chainStatus)}</div>`;
       
@@ -152,13 +162,15 @@ export class TableRenderer {
       
       // Column 3: Height with animation
       const heightClass = this._getHeightAnimationClass(chainStatus.chain_id, chainStatus.height);
-      row.insertCell(2).innerHTML = `<div class="${heightClass}" data-chain="${chainStatus.chain_id}" style="font-family: monospace; color: #6f6f6f; text-align: start">${_.escape(chainStatus.height)}</div>`;
+      const heightCell = row.insertCell(2);
+      heightCell.innerHTML = `<div class="${heightClass}" data-chain="${chainStatus.chain_id}">${_.escape(chainStatus.height)}</div>`;
+      heightCell.classList.add('height-data'); // Add class for specific font styling
       
       // Column 4: Moniker
       if (chainStatus.moniker === "not connected") {
         row.insertCell(3).innerHTML = `<div class="uk-text-warning">${_.escape(chainStatus.moniker)}</div>`;
       } else {
-        row.insertCell(3).innerHTML = `<div class='uk-text-truncate'>${_.escape(chainStatus.moniker.substring(0,24))}</div>`;
+        row.insertCell(3).innerHTML = `<div>${_.escape(chainStatus.moniker)}</div>`;
       }
       
       // Column 5: Bonded status
@@ -169,13 +181,19 @@ export class TableRenderer {
       row.insertCell(5).innerHTML = `<div style="text-align: center">${chainStatus.unvoted_open_gov_proposals}</div>`;
       
       // Column 7: Uptime window
-      row.insertCell(6).innerHTML = `<div uk-grid>${this._createUptimeWindow(chainStatus)}</div>`;
+      const uptimeCell = row.insertCell(6);
+      uptimeCell.innerHTML = `<div uk-grid>${this._createUptimeWindow(chainStatus)}</div>`;
+      uptimeCell.classList.add('numeric-data'); // Add class for font styling
       
       // Column 8: Threshold
-      row.insertCell(7).innerHTML = `<div class="uk-text-center"><span class="uk-width-1-2">${100 * chainStatus.min_signed_per_window}%</span></div>`;
+      const thresholdCell = row.insertCell(7);
+      thresholdCell.innerHTML = `<div class="uk-text-center"><span class="uk-width-1-2">${100 * chainStatus.min_signed_per_window}%</span></div>`;
+      thresholdCell.classList.add('numeric-data'); // Add class for font styling
       
       // Column 9: RPC Nodes
-      row.insertCell(8).innerHTML = `<div class="uk-text-center">${this._createNodeStatus(chainStatus)}</div>`;
+      const rpcCell = row.insertCell(8);
+      rpcCell.innerHTML = `<div class="uk-text-center">${this._createNodeStatus(chainStatus)}</div>`;
+      rpcCell.classList.add('numeric-data'); // Add class for font styling
     }
   }
 } 
