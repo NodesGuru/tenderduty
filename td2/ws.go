@@ -123,7 +123,6 @@ func (cc *ChainConfig) WsRun() {
 						td.statsChan <- cc.mkUpdate(metricLastBlockSeconds, time.Since(cc.lastBlockTime).Seconds(), "")
 					}
 					cc.lastBlockTime = time.Now()
-					cc.lastBlockAlarm = false
 					info := getAlarms(cc.name)
 					cc.blocksResults = append([]int{int(signState)}, cc.blocksResults[:len(cc.blocksResults)-1]...)
 					if signState < 3 && cc.valInfo.Bonded {
