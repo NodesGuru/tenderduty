@@ -60,15 +60,19 @@ type alarmCache struct {
 	notifyMux      sync.RWMutex
 }
 
-func (a *alarmCache) clearNoBlocks(chain string) {
-	if a.AllAlarms == nil || a.AllAlarms[chain] == nil {
+func (a *alarmCache) clearNoBlocks(cc *ChainConfig) {
+	if a.AllAlarms == nil || a.AllAlarms[cc.name] == nil {
 		return
 	}
-	a.notifyMux.Lock()
-	defer a.notifyMux.Unlock()
-	for clearAlarm := range a.AllAlarms[chain] {
+	for clearAlarm := range a.AllAlarms[cc.name] {
 		if strings.HasPrefix(clearAlarm, "stalled: have not seen a new block on") {
-			delete(a.AllAlarms[chain], clearAlarm)
+			td.alert(
+				cc.name,
+				fmt.Sprintf("stalled: have not seen a new block on %s in %d minutes", cc.ChainId, cc.Alerts.Stalled),
+				"info",
+				true,
+				&cc.valInfo.Valcons,
+			)
 		}
 	}
 }
@@ -467,28 +471,22 @@ func (cc *ChainConfig) watch() {
 		}
 
 		// stalled chain detection
-		if cc.Alerts.StalledAlerts && !cc.lastBlockAlarm && !cc.lastBlockTime.IsZero() &&
-			cc.lastBlockTime.Before(time.Now().Add(time.Duration(-cc.Alerts.Stalled)*time.Minute)) {
-
-			// chain is stalled send an alert!
-			cc.lastBlockAlarm = true
-			td.alert(
-				cc.name,
-				fmt.Sprintf("stalled: have not seen a new block on %s in %d minutes", cc.ChainId, cc.Alerts.Stalled),
-				"critical",
-				false,
-				&cc.valInfo.Valcons,
-			)
-		} else if cc.Alerts.StalledAlerts && cc.lastBlockAlarm && cc.lastBlockTime.IsZero() {
-			cc.lastBlockAlarm = false
-			td.alert(
-				cc.name,
-				fmt.Sprintf("stalled: have not seen a new block on %s in %d minutes", cc.ChainId, cc.Alerts.Stalled),
-				"info",
-				true,
-				&cc.valInfo.Valcons,
-			)
-			alarms.clearNoBlocks(cc.name)
+		if cc.Alerts.StalledAlerts && !cc.lastBlockTime.IsZero() {
+			if !cc.lastBlockAlarm && cc.lastBlockTime.Before(time.Now().Add(time.Duration(-cc.Alerts.Stalled)*time.Minute)) {
+				// chain is stalled send an alert!
+				cc.lastBlockAlarm = true
+				td.alert(
+					cc.name,
+					fmt.Sprintf("stalled: have not seen a new block on %s in %d minutes", cc.ChainId, cc.Alerts.Stalled),
+					"critical",
+					false,
+					&cc.valInfo.Valcons,
+				)
+			} else if !cc.lastBlockTime.Before(time.Now().Add(time.Duration(-cc.Alerts.Stalled)*time.Minute)) {
+				alarms.clearNoBlocks(cc)
+				cc.lastBlockAlarm = false
+				cc.activeAlerts = alarms.getCount(cc.name)
+			}
 		}
 
 		// jailed detection - only alert if it changes.
