@@ -1,5 +1,5 @@
 # 1st stage, build app
-FROM golang:1.24.1-bookworm as builder
+FROM golang:1.24.1-bookworm AS builder
 COPY . /build/app
 WORKDIR /build/app
 
@@ -8,7 +8,7 @@ RUN go get ./... && go build -ldflags "-s -w" -trimpath -o tenderduty main.go
 # 2nd stage, create a user to copy, and install libraries needed if connecting to upstream TLS server
 # we don't want the /lib and /lib64 from the go container cause it has more than we need.
 FROM debian:12 AS ssl
-ENV DEBIAN_FRONTEND noninteractive
+ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get -y upgrade && apt-get install -y ca-certificates && \
   addgroup --gid 26657 --system tenderduty && adduser -uid 26657 --ingroup tenderduty --system --home /var/lib/tenderduty tenderduty
 # the following is a workaround that makes stage 3 work for multiple architectures
