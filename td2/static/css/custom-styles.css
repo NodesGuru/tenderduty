@@ -220,7 +220,7 @@ body {
   flex-direction: column;
   min-height: 0; /* Prevent overflow */
   overflow: hidden; /* Contain children */
-  padding-top: 10px; /* Add space above logs label */
+  padding-top: 20px; /* Add space above logs label */
   padding-left: 0; /* Reset padding if needed */
   padding-right: 0;
   padding-bottom: 0;
@@ -235,16 +235,12 @@ body {
 }
 
 /* Make the actual log display fill the container and scroll */
-/* td2/static/css/custom-styles.css */
-
-/* --- REPLACE the whole rule for #logs --- */
 #logs {
   flex: 1 1 0;      /* fill the .log-container but never push it taller */
   min-height: 100px;
   overflow-y: auto; /* vertical scrollbar instead of vertical growth */
   box-sizing: border-box;
 }
-
 
 /* Style the log toggle label */
 .log-toggle-label {
