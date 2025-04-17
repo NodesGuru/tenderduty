@@ -5,7 +5,6 @@
 export class TableRenderer {
   constructor() {
     this.statusTable = document.getElementById('statusTable');
-    this.blocks = new Map(); // Track block heights for animation
     this.gridRenderer = null; // Will be set by the app
     
     // Listen for theme changes to potentially update table styles
@@ -120,13 +119,9 @@ export class TableRenderer {
     // Check with grid renderer if available
     if (this.gridRenderer && this.gridRenderer.updateBlockHeight(chainId, height)) {
       return 'block-height-change';
+    } else {
+      return '';
     }
-    
-    // Fallback to our own tracking
-    const previousHeight = this.blocks.get(chainId);
-    const animationClass = previousHeight !== height ? 'block-height-change' : '';
-    this.blocks.set(chainId, height);
-    return animationClass;
   }
 
   /**

@@ -28,14 +28,9 @@ export class WebSocketManager {
    * @private
    */
   _processMessage(event) {
-    // Debug: Log received messages
-    console.log('WebSocket message received:', event.data);
-    
     try {
       // Parse the message to check its structure
       const data = JSON.parse(event.data);
-      console.log('Parsed message:', data);
-      console.log('Message type:', data.msgType);
     } catch (error) {
       console.error('Error parsing message:', error);
     }
@@ -60,7 +55,6 @@ export class WebSocketManager {
     
     // First try the original URL format
     const wsUrl = `${wsProtocol}${location.host}/ws`;
-    console.log('WebSocket URL:', wsUrl);
     
     // For local development, uncomment the line below
     return 'ws://127.0.0.1:8888/ws';
@@ -73,7 +67,6 @@ export class WebSocketManager {
    */
   connect() {
     if (this.socket && this.isConnected) {
-      console.log('Already connected to WebSocket');
       return;
     }
     
@@ -83,30 +76,25 @@ export class WebSocketManager {
 
     try {
       const url = this._getWebSocketUrl();
-      console.log('Connecting to WebSocket at:', url);
       this.socket = new WebSocket(url);
       
       // Set up event handlers
       this.socket.addEventListener('message', (event) => this._processMessage(event));
       
       this.socket.addEventListener('open', () => {
-        console.log('WebSocket connection established');
         this.isConnected = true;
       });
       
       this.socket.addEventListener('close', (event) => {
-        console.log('WebSocket connection closed, retrying...', event.reason);
         this.isConnected = false;
         this._scheduleReconnect();
       });
       
       this.socket.addEventListener('error', (error) => {
-        console.error('WebSocket error:', error);
         this.isConnected = false;
       });
       
     } catch (error) {
-      console.error('Failed to connect to WebSocket:', error);
       this._scheduleReconnect();
     }
   }
@@ -127,9 +115,7 @@ export class WebSocketManager {
    * @private
    */
   _scheduleReconnect() {
-    console.log(`Scheduling reconnect in ${this.reconnectTimeout}ms`);
     setTimeout(() => {
-      console.log('Attempting to reconnect WebSocket...');
       this.connect();
     }, this.reconnectTimeout);
   }

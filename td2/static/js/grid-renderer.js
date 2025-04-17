@@ -11,8 +11,6 @@ export class GridRenderer {
     // Debug: Check if grid container exists
     if (!this.gridContainer) {
       console.error('Grid container not found! Make sure grid-container element exists in HTML');
-    } else {
-      console.log('Grid container found:', this.gridContainer);
     }
     
     this.blocksPerRow = 500; // Number of blocks to show for each chain
@@ -24,7 +22,6 @@ export class GridRenderer {
    * @param {Object} data - The state data containing status information
    */
   drawSeries(data) {
-    console.log('GridRenderer.drawSeries called with data:', data);
     
     if (!data || !data.Status || !data.Status.length) {
       console.error('Invalid state data for grid rendering');
@@ -65,11 +62,9 @@ export class GridRenderer {
       let blockData = [];
       
       if (chainStatus.blocks && Array.isArray(chainStatus.blocks)) {
-        console.log(`Chain ${chainStatus.name} has ${chainStatus.blocks.length} blocks as array`);
         blockData = chainStatus.blocks;
       } else if (typeof chainStatus.blocks === 'object') {
         // Convert object to array if needed
-        console.log(`Chain ${chainStatus.name} has blocks as object, converting to array`);
         blockData = Object.values(chainStatus.blocks);
       } else {
         console.warn(`Chain ${chainStatus.name} has no blocks data or unsupported format`);
@@ -77,7 +72,6 @@ export class GridRenderer {
       
       // Ensure we have some blocks to show even if data is missing
       if (blockData.length === 0) {
-        console.log('No block data, creating placeholder blocks');
         blockData = new Array(50).fill(BLOCK_STATUS.NO_DATA);
       }
       
@@ -102,7 +96,6 @@ export class GridRenderer {
       }
     });
     
-    console.log('Grid rendering complete');
   }
   
   /**
@@ -158,7 +151,6 @@ export class GridRenderer {
         block.appendChild(line);
         break;
       default:
-        console.log('Unknown block status:', status);
         block.classList.add('status-no-data');
         statusText = 'No Data';
     }
@@ -203,8 +195,7 @@ export class GridRenderer {
   animateHeightChange(chainId, newHeight) {
     // Update height elements in the table (if they exist)
     const heightElements = document.querySelectorAll(`[data-chain="${chainId}"]`);
-    console.log(`Animating height change for ${chainId} to ${newHeight}, found ${heightElements.length} elements`);
-    
+
     heightElements.forEach(element => {
       // Update text
       element.textContent = newHeight;
@@ -214,13 +205,5 @@ export class GridRenderer {
       void element.offsetWidth; // Force reflow to restart animation
       element.classList.add('block-height-change');
     });
-  }
-
-  /**
-   * No need to explicitly draw the legend as it's rendered through HTML/CSS
-   */
-  drawLegend() {
-    // Legend is now built with HTML/CSS, no additional rendering needed
-    console.log('drawLegend called - no action needed as legend is built with HTML/CSS');
   }
 } 
