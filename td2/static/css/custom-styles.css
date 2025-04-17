@@ -108,42 +108,6 @@ body {
   background-color: rgba(255, 85, 85, 0.15); /* Slightly adjusted for dark mode */
 }
 
-
-/* 4. Interactive Elements */
-
-/* Collapsible Logs Section */
-.log-container {
-  max-height: 250px; /* Default open height */
-  overflow: auto;
-  transition: max-height 0.4s ease, opacity 0.3s ease, padding 0.3s ease;
-  border-radius: 4px; /* Match logs-box */
-}
-
-.log-toggle-checkbox:not(:checked) ~ .log-container {
-  max-height: 0;
-  opacity: 0;
-  padding-top: 0;
-  padding-bottom: 0;
-  border: none;
-  overflow: hidden;
-}
-
-.log-toggle-label {
-  cursor: pointer;
-  user-select: none;
-  display: block; /* Make it block level for better spacing */
-  margin-bottom: 5px; /* Space between label and logs */
-  font-weight: 500;
-}
-/* Update arrow indicator */
-.log-toggle-checkbox:not(:checked) + .log-toggle-label::after {
-  content: ' ▶'; /* Collapsed indicator */
-}
-.log-toggle-checkbox:checked + .log-toggle-label::after {
-  content: ' ▼'; /* Expanded indicator */
-}
-
-
 /* Row Hover Effects */
 #statusTableRoot tbody tr:hover {
   background-color: rgba(255, 255, 255, 0.05);
@@ -262,25 +226,25 @@ body {
   padding-bottom: 0;
 }
 
-/* Ensure the inner log container can grow */
 #logContainerWrapper .log-container {
-  flex-grow: 1;
-  display: flex; /* To make the pre element fill it */
-  min-height: 0;
-  /* Remove fixed max-height from original rule */
-  max-height: none; 
-  overflow: hidden; /* Let the #logs handle scroll */
+  /* occupy exactly the leftover space between table and footer */
+  flex: 1 1 0;      /* grow, shrink, start at 0 height */
+  display: flex;
+  min-height: 100px;    /* must be 0 so flexbox may shrink if needed */
+  overflow: hidden; /* let the <pre> inside do the scrolling */
 }
 
 /* Make the actual log display fill the container and scroll */
+/* td2/static/css/custom-styles.css */
+
+/* --- REPLACE the whole rule for #logs --- */
 #logs {
-  flex-grow: 1;
-  height: auto; /* Let flexbox determine height */
-  min-height: 0;
-  overflow-y: auto; /* Ensure vertical scrolling */
-  /* Remove uk-panel-scrollable if it interferes, or keep if needed */
-  /* border: 1px solid red; */ /* Debug border */
+  flex: 1 1 0;      /* fill the .log-container but never push it taller */
+  min-height: 100px;
+  overflow-y: auto; /* vertical scrollbar instead of vertical growth */
+  box-sizing: border-box;
 }
+
 
 /* Style the log toggle label */
 .log-toggle-label {

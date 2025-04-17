@@ -200,22 +200,6 @@ div#legend-container {
   100% { transform: scale(1); opacity: 1; }
 }
 
-/* Log area styles - Apply theme directly */
-#logs {
-  height: 300px; /* Keep the height */
-  font-family: monospace;
-}
-
-body.uk-light #logs {
-  background-color: var(--log-background);
-  color: var(--log-text-color);
-}
-
-body.uk-text-default #logs {
-  background-color: var(--log-background);
-  color: var(--log-text-color);
-}
-
 /* Legend styles */
 #legend-container {
   display: flex;
