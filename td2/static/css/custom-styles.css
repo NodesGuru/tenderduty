@@ -58,6 +58,42 @@ body {
    border-bottom-color: rgba(255, 255, 255, 0.3); /* Ensure visibility in dark mode */
 }
 
+/* Status Indicator Styles */
+.status-indicator {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  vertical-align: middle;
+  cursor: default; /* Indicate it's not clickable, tooltip provides info */
+}
+
+.status-indicator-green {
+  background-color: #32d296; /* UIKit success green */
+  box-shadow: 0 0 5px rgba(50, 210, 150, 0.7);
+}
+
+.status-indicator-orange {
+  background-color: #faa05a; /* UIKit warning orange */
+  box-shadow: 0 0 5px rgba(250, 160, 90, 0.7);
+}
+
+.status-indicator-red {
+  background-color: #f0506e; /* UIKit danger red */
+  box-shadow: 0 0 5px rgba(240, 80, 110, 0.7);
+}
+
+.status-indicator-gray {
+  background-color: #999; /* Neutral gray */
+  box-shadow: 0 0 3px rgba(153, 153, 153, 0.5);
+}
+
+/* Style for the cell containing the indicator */
+#statusTableRoot td.status-cell {
+  width: 60px; /* Give it a fixed width */
+  text-align: center;
+}
+
 /* 2. Status Squares & Legends */
 /* Persistent legend is already in HTML */
 

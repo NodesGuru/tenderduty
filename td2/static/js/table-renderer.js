@@ -53,21 +53,28 @@ export class TableRenderer {
   }
 
   /**
-   * Create HTML markup for bonded status
+   * Create HTML markup for bonded status indicator
    * @param {Object} status - Status data for a chain
-   * @returns {string} HTML markup for bonded status
+   * @returns {string} HTML markup for status indicator
    * @private
    */
-  _createBondedStatus(status) {
+  _createStatusIndicator(status) {
+    let statusClass = 'status-indicator-gray'; // Default to gray (inactive)
+    let statusText = 'Inactive';
+
     if (status.tombstoned) {
-      return "<div class='uk-text-warning'><span uk-icon='ban'></span> <strong>Tombstoned</strong></div>";
+      statusClass = 'status-indicator-red';
+      statusText = 'Tombstoned';
     } else if (status.jailed) {
-      return "<span uk-icon='warning'></span> <strong>Jailed</strong>";
+      statusClass = 'status-indicator-orange';
+      statusText = 'Jailed';
     } else if (status.bonded) {
-      return "<span uk-icon='check'></span>";
-    } else {
-      return "<span uk-icon='minus-circle'></span> Not active";
+      statusClass = 'status-indicator-green';
+      statusText = 'Bonded (Active)';
     }
+    // Assuming 'not connected' implies inactive/unknown status handled by the caller
+
+    return `<span class="status-indicator ${statusClass}" uk-tooltip="${_.escape(statusText)}"></span>`;
   }
 
   /**
@@ -149,28 +156,30 @@ export class TableRenderer {
         row.classList.add('row-has-alert');
       }
       
-      // Column 1: Alerts
-      row.insertCell(0).innerHTML = `<div>${this._createAlerts(chainStatus)}</div>`;
+      // Column 1: Status Indicator
+      const bondedStatus = chainStatus.moniker === "not connected" ? '<span class="status-indicator status-indicator-gray" uk-tooltip="Unknown Status"></span>' : this._createStatusIndicator(chainStatus);
+      const statusCell = row.insertCell(0);
+      statusCell.innerHTML = `<div style="text-align: center">${bondedStatus}</div>`;
+      statusCell.classList.add('status-cell'); // Add class for specific styling if needed
       
-      // Column 2: Chain ID
-      row.insertCell(1).innerHTML = `<div>${_.escape(chainStatus.name)} (${_.escape(chainStatus.chain_id)})</div>`;
+      // Column 2: Alerts
+      row.insertCell(1).innerHTML = `<div>${this._createAlerts(chainStatus)}</div>`;
       
-      // Column 3: Height with animation
+      // Column 3: Chain ID
+      row.insertCell(2).innerHTML = `<div>${_.escape(chainStatus.name)} (${_.escape(chainStatus.chain_id)})</div>`;
+      
+      // Column 4: Height with animation
       const heightClass = this._getHeightAnimationClass(chainStatus.chain_id, chainStatus.height);
-      const heightCell = row.insertCell(2);
+      const heightCell = row.insertCell(3);
       heightCell.innerHTML = `<div class="${heightClass}" data-chain="${chainStatus.chain_id}">${_.escape(chainStatus.height)}</div>`;
       heightCell.classList.add('height-data'); // Add class for specific font styling
       
-      // Column 4: Moniker
+      // Column 5: Moniker
       if (chainStatus.moniker === "not connected") {
-        row.insertCell(3).innerHTML = `<div class="uk-text-warning">${_.escape(chainStatus.moniker)}</div>`;
+        row.insertCell(4).innerHTML = `<div class="uk-text-warning">${_.escape(chainStatus.moniker)}</div>`;
       } else {
-        row.insertCell(3).innerHTML = `<div>${_.escape(chainStatus.moniker)}</div>`;
+        row.insertCell(4).innerHTML = `<div>${_.escape(chainStatus.moniker)}</div>`;
       }
-      
-      // Column 5: Bonded status
-      const bondedStatus = chainStatus.moniker === "not connected" ? "unknown" : this._createBondedStatus(chainStatus);
-      row.insertCell(4).innerHTML = `<div style="text-align: center">${bondedStatus}</div>`;
       
       // Column 6: Unvoted Proposals
       row.insertCell(5).innerHTML = `<div style="text-align: center">${chainStatus.unvoted_open_gov_proposals}</div>`;
