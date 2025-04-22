@@ -22,59 +22,69 @@ export class TableRenderer {
   }
 
   /**
-   * Create HTML alert elements based on status data
+   * Create HTML markup for status indicator and potential modal
    * @param {Object} status - Status data for a chain
-   * @returns {string} HTML markup for alerts
+   * @returns {string} HTML markup for status indicator and modal
    * @private
    */
-  _createAlerts(status) {
-    if (status.active_alerts === 0 && status.last_error === '') {
-      return '&nbsp;';
-    }
-    
-    // Add the alert-active class to the container div for pulsing effect
-    const alertContainerClass = 'alert-active';
+  _createStatusIndicator(status) {
+    let statusClass = '';
+    let statusText = '';
+    let toggleAttribute = '';
+    let modalHtml = '';
+    const modalId = `modal-center-${_.escape(status.name)}`;
 
+    // Create modal first if there is a last_error
     if (status.last_error !== '') {
-      return `
-        <div class="${alertContainerClass}">
-          <a href="#modal-center-${status.name}" uk-toggle><span class="alert-icon" uk-icon='warning' uk-tooltip="${_.escape(status.active_alerts)} active issues"></span></a>
-        </div>
-        <div id="modal-center-${_.escape(status.name)}" class="uk-flex-top" uk-modal>
+      modalHtml = `
+        <div id="${modalId}" class="uk-flex-top" uk-modal>
             <div class="uk-modal-dialog uk-modal-body uk-margin-auto-vertical uk-background-secondary">
                 <button class="uk-modal-close-default" type="button" uk-close></button>
                 <pre class=" uk-background-secondary" style="color: white">${_.escape(status.last_error)}</pre>
             </div>
         </div>
       `;
+    }
+
+    if (status.active_alerts > 0) {
+      statusClass = 'status-indicator-yellow';
+      statusText = `${_.escape(status.active_alerts)} active issues`;
+      // Make yellow indicator clickable only if there's an error modal to show
+      if (status.last_error !== '') {
+        toggleAttribute = `uk-toggle="target: #${modalId}"`;
+      }
     } else {
-      return `<div class="${alertContainerClass}"><span class="alert-icon" uk-icon='warning' uk-tooltip="${_.escape(status.active_alerts)} active issues"></span></div>`;
+      // Determine base status when no active alerts
+      if (status.tombstoned) {
+        statusClass = 'status-indicator-red';
+        statusText = 'Tombstoned';
+      } else if (status.jailed) {
+        statusClass = 'status-indicator-orange';
+        statusText = 'Jailed';
+      } else if (status.bonded) {
+        statusClass = 'status-indicator-green';
+        statusText = 'Bonded (Active)';
+      } else {
+        // Includes 'not connected' case if moniker check is removed upstream
+        statusClass = 'status-indicator-gray';
+        statusText = 'Inactive';
+      }
+      
+      // Make base status indicator clickable only if there's an error modal
+      if (status.last_error !== '') {
+          toggleAttribute = `uk-toggle="target: #${modalId}"`;
+      }
     }
-  }
-
-  /**
-   * Create HTML markup for bonded status indicator
-   * @param {Object} status - Status data for a chain
-   * @returns {string} HTML markup for status indicator
-   * @private
-   */
-  _createStatusIndicator(status) {
-    let statusClass = 'status-indicator-gray'; // Default to gray (inactive)
-    let statusText = 'Inactive';
-
-    if (status.tombstoned) {
-      statusClass = 'status-indicator-red';
-      statusText = 'Tombstoned';
-    } else if (status.jailed) {
-      statusClass = 'status-indicator-orange';
-      statusText = 'Jailed';
-    } else if (status.bonded) {
-      statusClass = 'status-indicator-green';
-      statusText = 'Bonded (Active)';
+    
+    // Handle 'not connected' separately for status text/class if needed, though covered by 'Inactive'
+    if (status.moniker === "not connected") {
+        statusClass = 'status-indicator-gray';
+        statusText = 'Unknown Status';
+        // Prevent clicking if not connected, even if last_error exists?
+        // toggleAttribute = ''; // Uncomment this line if needed
     }
-    // Assuming 'not connected' implies inactive/unknown status handled by the caller
 
-    return `<span class="status-indicator ${statusClass}" uk-tooltip="${_.escape(statusText)}"></span>`;
+    return `<span class="status-indicator ${statusClass}" uk-tooltip="${statusText}" ${toggleAttribute}></span>${modalHtml}`;
   }
 
   /**
@@ -151,53 +161,50 @@ export class TableRenderer {
       const chainStatus = status.Status[i];
       const row = this.statusTable.insertRow(i);
       
-      // Add class to row if there are alerts or errors
-      if (chainStatus.active_alerts > 0 || chainStatus.last_error !== '') {
-        row.classList.add('row-has-alert');
-      }
+      // No longer add row-has-alert class
+      // if (chainStatus.active_alerts > 0 || chainStatus.last_error !== '') {
+      //  row.classList.add('row-has-alert');
+      // }
       
-      // Column 1: Status Indicator
-      const bondedStatus = chainStatus.moniker === "not connected" ? '<span class="status-indicator status-indicator-gray" uk-tooltip="Unknown Status"></span>' : this._createStatusIndicator(chainStatus);
+      // Column 1: Status Indicator (potentially includes modal HTML)
+      const statusHtml = this._createStatusIndicator(chainStatus);
       const statusCell = row.insertCell(0);
-      statusCell.innerHTML = `<div style="text-align: center">${bondedStatus}</div>`;
-      statusCell.classList.add('status-cell'); // Add class for specific styling if needed
+      statusCell.innerHTML = `<div style="text-align: center">${statusHtml}</div>`;
+      statusCell.classList.add('status-cell'); 
+
+      // Column 2: Chain ID (Index adjusted from 2 to 1)
+      row.insertCell(1).innerHTML = `<div>${_.escape(chainStatus.name)} (${_.escape(chainStatus.chain_id)})</div>`;
       
-      // Column 2: Alerts
-      row.insertCell(1).innerHTML = `<div>${this._createAlerts(chainStatus)}</div>`;
-      
-      // Column 3: Chain ID
-      row.insertCell(2).innerHTML = `<div>${_.escape(chainStatus.name)} (${_.escape(chainStatus.chain_id)})</div>`;
-      
-      // Column 4: Height with animation
+      // Column 3: Height with animation (Index adjusted from 3 to 2)
       const heightClass = this._getHeightAnimationClass(chainStatus.chain_id, chainStatus.height);
-      const heightCell = row.insertCell(3);
+      const heightCell = row.insertCell(2);
       heightCell.innerHTML = `<div class="${heightClass}" data-chain="${chainStatus.chain_id}">${_.escape(chainStatus.height)}</div>`;
-      heightCell.classList.add('height-data'); // Add class for specific font styling
+      heightCell.classList.add('height-data');
       
-      // Column 5: Moniker
+      // Column 4: Moniker (Index adjusted from 4 to 3)
       if (chainStatus.moniker === "not connected") {
-        row.insertCell(4).innerHTML = `<div class="uk-text-warning">${_.escape(chainStatus.moniker)}</div>`;
+        row.insertCell(3).innerHTML = `<div class="uk-text-warning">${_.escape(chainStatus.moniker)}</div>`;
       } else {
-        row.insertCell(4).innerHTML = `<div>${_.escape(chainStatus.moniker)}</div>`;
+        row.insertCell(3).innerHTML = `<div>${_.escape(chainStatus.moniker)}</div>`;
       }
       
-      // Column 6: Unvoted Proposals
-      row.insertCell(5).innerHTML = `<div style="text-align: center">${chainStatus.unvoted_open_gov_proposals}</div>`;
+      // Column 5: Unvoted Proposals (Index adjusted from 5 to 4)
+      row.insertCell(4).innerHTML = `<div style="text-align: center">${chainStatus.unvoted_open_gov_proposals}</div>`;
       
-      // Column 7: Uptime window
-      const uptimeCell = row.insertCell(6);
+      // Column 6: Uptime window (Index adjusted from 6 to 5)
+      const uptimeCell = row.insertCell(5);
       uptimeCell.innerHTML = `<div uk-grid>${this._createUptimeWindow(chainStatus)}</div>`;
-      uptimeCell.classList.add('numeric-data'); // Add class for font styling
+      uptimeCell.classList.add('numeric-data');
       
-      // Column 8: Threshold
-      const thresholdCell = row.insertCell(7);
+      // Column 7: Threshold (Index adjusted from 7 to 6)
+      const thresholdCell = row.insertCell(6);
       thresholdCell.innerHTML = `<div class="uk-text-center"><span class="uk-width-1-2">${100 * chainStatus.min_signed_per_window}%</span></div>`;
-      thresholdCell.classList.add('numeric-data'); // Add class for font styling
+      thresholdCell.classList.add('numeric-data');
       
-      // Column 9: RPC Nodes
-      const rpcCell = row.insertCell(8);
+      // Column 8: RPC Nodes (Index adjusted from 8 to 7)
+      const rpcCell = row.insertCell(7);
       rpcCell.innerHTML = `<div class="uk-text-center">${this._createNodeStatus(chainStatus)}</div>`;
-      rpcCell.classList.add('numeric-data'); // Add class for font styling
+      rpcCell.classList.add('numeric-data');
     }
   }
 } 

@@ -78,6 +78,11 @@ body {
   box-shadow: 0 0 5px rgba(250, 160, 90, 0.7);
 }
 
+.status-indicator-yellow {
+  background-color: #fcc419; /* A vibrant yellow */
+  box-shadow: 0 0 6px rgba(252, 196, 25, 0.7);
+}
+
 .status-indicator-red {
   background-color: #f0506e; /* UIKit danger red */
   box-shadow: 0 0 5px rgba(240, 80, 110, 0.7);
@@ -132,30 +137,9 @@ body {
 /* Example: <span class="legend-label" data-tooltip="Validator Proposed Block">proposer</span> */
 
 
-/* 3. Alerts & Notifications */
-@keyframes pulse {
-  0% { opacity: 0.6; box-shadow: 0 0 0 0 rgba(255, 165, 0, 0.7); } /* Orange glow */
-  50% { opacity: 1; box-shadow: 0 0 0 5px rgba(255, 165, 0, 0); }
-  100% { opacity: 0.6; box-shadow: 0 0 0 0 rgba(255, 165, 0, 0); }
-}
+/* 3. Alerts & Notifications - REMOVED OLD STYLES */
 
-.alert-icon {
-  color: darkorange;
-  transition: color 0.3s ease; /* Add transition */
-}
-
-.alert-active .alert-icon { /* Target icon within the active alert container */
-  color: darkorange !important; /* Ensure color override */
-  animation: pulse 2s infinite;
-}
-
-/* Highlight problematic rows */
-#statusTableRoot tbody tr.row-has-alert {
-  background-color: rgba(255, 85, 85, 0.1); /* Soft red background */
-}
-.uk-light #statusTableRoot tbody tr.row-has-alert {
-  background-color: rgba(255, 85, 85, 0.15); /* Slightly adjusted for dark mode */
-}
+/* Highlight problematic rows - REMOVED */
 
 /* Row Hover Effects */
 #statusTableRoot tbody tr:hover {
@@ -166,13 +150,7 @@ body {
   background-color: rgba(255, 255, 255, 0.1); /* Slightly stronger hover for dark mode */
 }
 
-/* Prevent hover if row already has alert background */
-#statusTableRoot tbody tr.row-has-alert:hover {
-  background-color: rgba(255, 85, 85, 0.1);
-}
-.uk-light #statusTableRoot tbody tr.row-has-alert:hover {
-  background-color: rgba(255, 85, 85, 0.15);
-}
+/* Prevent hover if row already has alert background - REMOVED */
 
 
 /* 5. Typography and Accessibility */
@@ -192,7 +170,7 @@ body {
 
 /* 6. Micro-interactions and Visual Delights */
 /* General transitions for interactive elements */
-.status-square, .alert-icon, .legend-block {
+.status-square, .legend-block {
   transition: all 0.3s ease;
 }
 
@@ -327,13 +305,7 @@ body {
   background-color: rgba(255, 255, 255, 0.1); /* Slightly stronger hover for dark mode */
 }
 
-/* Prevent hover if row already has alert background */
-#statusTableRoot tbody tr.row-has-alert:hover {
-  background-color: rgba(255, 85, 85, 0.1);
-}
-.uk-light #statusTableRoot tbody tr.row-has-alert:hover {
-  background-color: rgba(255, 85, 85, 0.15);
-}
+/* Prevent hover if row already has alert background - REMOVED */
 
 
 /* 8. Specific overrides for UIkit if necessary */
@@ -457,4 +429,9 @@ body.uk-light .footer-container > a:hover .logo-icon {
   flex-shrink: 0; /* Prevent footer from shrinking */
   box-sizing: border-box;
   margin-top: auto; /* Push to bottom if main content allows */
+}
+
+/* Make indicator clickable when it triggers a modal */
+.status-indicator[uk-toggle] {
+  cursor: pointer;
 } 
