@@ -374,4 +374,51 @@ body {
   left: 0;
   background-color: var(--background);
   z-index: 10;
+}
+
+/* --- Footer Styles --- */
+
+/* Default logo styling */
+.logo-icon {
+  color: grey;
+  height: 32px;
+  width: auto;
+  vertical-align: middle;
+}
+
+/* Footer layout */
+.footer-container {
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 16px;
+}
+
+/* Default link/icon color */
+.footer-container > a { color: grey; }
+
+/* Light Mode Hover */
+body:not(.uk-light) .footer-container > a:hover {
+  color: black;
+}
+body:not(.uk-light) .footer-container > a:hover .logo-icon {
+  color: black;
+}
+
+/* Dark Mode Hover */
+body.uk-light .footer-container > a:hover {
+  color: white;
+}
+body.uk-light .footer-container > a:hover .logo-icon {
+  color: white;
+}
+
+/* Optional: Ensure footer container itself is correctly placed */
+.uk-container.uk-height-viewport > .footer-container {
+  padding: 10px 16px; /* Adjust padding as needed */
+  flex-shrink: 0; /* Prevent footer from shrinking */
+  box-sizing: border-box;
+  margin-top: auto; /* Push to bottom if main content allows */
 } 
