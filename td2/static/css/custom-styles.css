@@ -1,0 +1,437 @@
+/* Custom Styles for Tenderduty Dashboard */
+
+/* General & Body */
+body {
+  color: #333; /* Default darker text for light mode */
+}
+
+/* Explicit light mode table colors for contrast */
+#statusTableRoot .uk-table th,
+#statusTableRoot .uk-table td {
+  color: #333; /* Dark text for table cells in light mode */
+}
+#statusTableRoot thead th {
+    color: #111; /* Even darker for headers */
+}
+
+/* Dark theme adjustments */
+.uk-light body {
+  color: #ddd; /* Ensure contrast in dark mode */
+}
+.uk-light .uk-table th,
+.uk-light .uk-table td {
+  color: #ddd !important; /* Ensure table text is visible in dark mode, override if needed */
+}
+.uk-light .uk-link-muted {
+  color: #ccc; /* Adjust link color for dark mode */
+}
+.uk-light .log-toggle-label {
+  color: #eee;
+}
+
+/* 1. Layout and Spacing */
+#statusTableRoot .uk-table th,
+#statusTableRoot .uk-table td {
+  padding-top: 12px;    /* Increased vertical padding */
+  padding-bottom: 12px; /* Increased vertical padding */
+  vertical-align: middle;
+}
+
+#statusTableRoot tbody tr {
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08); /* Subtle DARK row separator for light mode */
+}
+/* Remove border from last row */
+#statusTableRoot tbody tr:last-child {
+  border-bottom: none;
+}
+.uk-light #statusTableRoot tbody tr {
+    border-bottom-color: rgba(255, 255, 255, 0.1); /* Restore light separator for dark mode */
+}
+
+#statusTableRoot thead th {
+  font-weight: 600;
+  text-transform: uppercase;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.15); /* Slightly darker header separator for light mode */
+  /* color: #111; /* Moved this specific rule higher for light mode */
+}
+.uk-light #statusTableRoot thead th {
+   border-bottom-color: rgba(255, 255, 255, 0.3); /* Ensure visibility in dark mode */
+}
+
+/* Status Indicator Styles */
+.status-indicator {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  vertical-align: middle;
+  cursor: default; /* Indicate it's not clickable, tooltip provides info */
+}
+
+.status-indicator-green {
+  background-color: #32d296; /* UIKit success green */
+  box-shadow: 0 0 5px rgba(50, 210, 150, 0.7);
+}
+
+.status-indicator-orange {
+  background-color: #faa05a; /* UIKit warning orange */
+  box-shadow: 0 0 5px rgba(250, 160, 90, 0.7);
+}
+
+.status-indicator-yellow {
+  background-color: #fcc419; /* A vibrant yellow */
+  box-shadow: 0 0 6px rgba(252, 196, 25, 0.7);
+}
+
+.status-indicator-red {
+  background-color: #f0506e; /* UIKit danger red */
+  box-shadow: 0 0 5px rgba(240, 80, 110, 0.7);
+}
+
+.status-indicator-gray {
+  background-color: #999; /* Neutral gray */
+  box-shadow: 0 0 3px rgba(153, 153, 153, 0.5);
+}
+
+/* Style for the cell containing the indicator */
+#statusTableRoot td.status-cell {
+  width: 60px; /* Give it a fixed width */
+  text-align: center;
+}
+
+/* 2. Status Squares & Legends */
+/* Persistent legend is already in HTML */
+
+/* CSS Tooltips for Legend Items */
+.legend-item {
+  position: relative;
+  display: inline-flex; /* Align items nicely */
+  align-items: center;
+  margin-right: 10px; /* Spacing between legend items */
+}
+
+.legend-item .legend-label::before {
+  content: attr(data-tooltip); /* Use data-tooltip attribute for text */
+  position: absolute;
+  bottom: 100%; /* Position above the element */
+  left: 50%;
+  transform: translateX(-50%) translateY(-5px); /* Center and add spacing */
+  background-color: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.8em;
+  white-space: nowrap;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.3s ease, visibility 0.3s ease;
+  z-index: 10;
+}
+
+.legend-item:hover .legend-label::before {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* Add tooltip content via JS or directly in HTML if static */
+/* Example: <span class="legend-label" data-tooltip="Validator Proposed Block">proposer</span> */
+
+
+/* 3. Alerts & Notifications - REMOVED OLD STYLES */
+
+/* Highlight problematic rows - REMOVED */
+
+/* Row Hover Effects */
+#statusTableRoot tbody tr:hover {
+  background-color: rgba(255, 255, 255, 0.05);
+  transition: background-color 0.2s ease;
+}
+.uk-light #statusTableRoot tbody tr:hover {
+  background-color: rgba(255, 255, 255, 0.1); /* Slightly stronger hover for dark mode */
+}
+
+/* Prevent hover if row already has alert background - REMOVED */
+
+
+/* 5. Typography and Accessibility */
+#statusTableRoot td.numeric-data {
+  font-size: calc(1em + 1px); /* Slightly larger font size */
+}
+/* Monospace for height */
+#statusTableRoot td.height-data {
+  font-family: 'JetBrains Mono', Consolas, monaco, monospace;
+  font-size: calc(1em + 1px);
+  color: #555; /* Darker gray for height in light mode */
+}
+.uk-light #statusTableRoot td.height-data {
+   color: #999;
+}
+
+
+/* 6. Micro-interactions and Visual Delights */
+/* General transitions for interactive elements */
+.status-square, .legend-block {
+  transition: all 0.3s ease;
+}
+
+/* Terminal Logs Styling */
+.logs-box {
+  font-family: 'JetBrains Mono', 'IBM Plex Mono', Consolas, monaco, monospace;
+  line-height: 1.4;
+  background-color: rgba(0, 0, 0, 0.05); /* Slightly lighter background */
+  color: #333; /* Darker text for light mode */
+  padding: 15px;
+  border-radius: 6px; /* Slightly more rounded */
+  border: 1px solid #d0d7de; /* GitHub-style light border */
+}
+
+.uk-light .logs-box {
+  background-color: rgba(10, 10, 10, 0.3); /* Darker background */
+  color: #eee; /* Light text for dark mode */
+  border: 1px solid #444c56; /* GitHub-style dark border */
+}
+
+
+/* 7. Responsive Enhancements */
+
+/* Make the main viewport container a flex container */
+.uk-container.uk-height-viewport {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh; /* Ensure it fills viewport height */
+  padding: 0; /* Remove default uk-container padding if it interferes */
+  box-sizing: border-box;
+  flex: initial !important; /* Override uk-width-expand's flex: 1 */
+}
+
+.dashboard-container {
+  display: flex; /* Keep internal flex for later */
+  flex-direction: column; /* Keep internal flex for later */
+  flex-grow: 1; /* Make this grow to push footer down */
+  /* Remove potentially conflicting styles for now */
+  /* gap: 16px; */
+  margin-top: 16px;
+  min-height: 0; /* Important for flex children */
+  padding: 0 24px; /* Apply padding only left/right */
+  box-sizing: border-box;
+}
+
+/* Adjust layout for wider screens */
+@media (min-width: 960px) { /* Using UIKit's medium breakpoint */
+  .dashboard-container {
+    /* Arrange in potentially two columns or keep flexible */
+    /* Example: Allow items to wrap if needed */
+     /* flex-direction: row; */ /* Uncomment if side-by-side is desired */
+     /* flex-wrap: wrap; */
+  }
+  /* Example: give table more prominence */
+  #tableDiv {
+     /* flex-grow: 1; */
+  }
+}
+
+/* Ensure containers don't overflow */
+#tableDiv {
+  overflow-x: auto; /* Allow horizontal scroll for table on small screens */
+  flex-shrink: 0; /* Prevent table from shrinking */
+}
+#canvasDiv {
+   flex-shrink: 0; /* Prevent grid from shrinking */
+   overflow: visible; 
+   flex: initial !important; /* Override uk-width-expand's flex: 1 */
+}
+
+#logContainerWrapper {
+  flex-grow: 1; /* Make this container expand */
+  display: flex;
+  flex-direction: column;
+  min-height: 0; /* Prevent overflow */
+  overflow: hidden; /* Contain children */
+  padding-top: 20px; /* Add space above logs label */
+  padding-left: 0; /* Reset padding if needed */
+  padding-right: 0;
+  padding-bottom: 0;
+}
+
+#logContainerWrapper .log-container {
+  /* occupy exactly the leftover space between table and footer */
+  flex: 1 1 0;      /* grow, shrink, start at 0 height */
+  display: flex;
+  min-height: 100px;    /* must be 0 so flexbox may shrink if needed */
+  overflow: hidden; /* let the <pre> inside do the scrolling */
+}
+
+/* Make the actual log display fill the container and scroll */
+#logs {
+  flex: 1 1 0;      /* fill the .log-container but never push it taller */
+  min-height: 100px;
+  overflow-y: auto; /* vertical scrollbar instead of vertical growth */
+  box-sizing: border-box;
+}
+
+/* Style the log toggle label */
+.log-toggle-label {
+  cursor: pointer;
+  user-select: none;
+  display: block; /* Make it block level for better spacing */
+  margin-bottom: 5px; /* Space between label and logs */
+  font-weight: 500;
+  flex-shrink: 0; /* Prevent label from shrinking */
+}
+/* Update arrow indicator */
+.log-toggle-checkbox:not(:checked) + .log-toggle-label::after {
+  content: ' ▶'; /* Collapsed indicator */
+}
+.log-toggle-checkbox:checked + .log-toggle-label::after {
+  content: ' ▼'; /* Expanded indicator */
+}
+
+/* Hide log container when checkbox is not checked */
+.log-toggle-checkbox:not(:checked) ~ .log-container {
+  display: none; /* Simpler hiding */
+}
+
+/* Show log container when checkbox is checked */
+.log-toggle-checkbox:checked ~ .log-container {
+  display: flex; /* Ensure it's displayed as flex */
+}
+
+/* Row Hover Effects */
+#statusTableRoot tbody tr:hover {
+  background-color: rgba(255, 255, 255, 0.05);
+  transition: background-color 0.2s ease;
+}
+.uk-light #statusTableRoot tbody tr:hover {
+  background-color: rgba(255, 255, 255, 0.1); /* Slightly stronger hover for dark mode */
+}
+
+/* Prevent hover if row already has alert background - REMOVED */
+
+
+/* 8. Specific overrides for UIkit if necessary */
+.uk-table-small th, .uk-table-small td {
+  /* Override default small padding if needed, but we added our own above */
+}
+
+/* Height Animation Class */
+.block-height-change {
+    animation: height-flash 0.7s ease-out;
+}
+
+@keyframes height-flash {
+    0% { background-color: rgba(0, 150, 255, 0.3); }
+    100% { background-color: transparent; }
+}
+.uk-light .block-height-change {
+    animation: height-flash-dark 0.7s ease-out;
+}
+@keyframes height-flash-dark {
+    0% { background-color: rgba(0, 150, 255, 0.4); }
+    100% { background-color: transparent; }
+}
+
+/* Ensure table cells wrap text instead of truncating */
+#statusTableRoot td {
+  white-space: normal; /* Allow wrapping */
+  overflow-wrap: break-word; /* Break long words */
+  word-wrap: break-word; /* Legacy support */
+  max-width: 200px; /* Optional: constrain max width if needed */
+}
+
+/* Remove truncation specifically from moniker if previously applied by JS */
+#statusTableRoot td .uk-text-truncate {
+  white-space: normal !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+}
+
+/* Optional: Style the footer */
+/* Ensure footer selector is specific enough */
+.uk-container.uk-height-viewport > .uk-text-small.uk-text-center {
+  padding: 10px 16px; /* Add padding to footer */
+  flex-shrink: 0; /* Prevent footer from shrinking */
+  box-sizing: border-box;
+}
+
+/* Scrollable grid wrapper: scroll only grid, keep legend fixed */
+.scrollable-grid-wrapper {
+  width: 100%;
+  overflow-x: auto;
+  overflow-y: visible;
+  /* position: relative; Let's see if removing helps tooltip */
+
+  /* Hide scrollbar cross-browser */
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
+/* Hide scrollbar for Chrome, Safari and Opera */
+.scrollable-grid-wrapper::-webkit-scrollbar {
+  display: none;
+}
+
+.scrollable-grid-wrapper #grid-container {
+  width: max-content; /* Expand to fit all blocks */
+  min-width: 100%; /* Ensure at least full width */
+  overflow: visible; /* Ensure tooltips are not cut */
+}
+
+/* Make chain labels sticky when scrolling grid horizontally */
+.scrollable-grid-wrapper .chain-label {
+  position: sticky;
+  left: 0;
+  background-color: var(--background);
+  z-index: 10;
+}
+
+/* --- Footer Styles --- */
+
+/* Default logo styling */
+.logo-icon {
+  color: grey;
+  height: 32px;
+  width: auto;
+  vertical-align: middle;
+}
+
+/* Footer layout */
+.footer-container {
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 16px;
+}
+
+/* Default link/icon color */
+.footer-container > a { color: grey; }
+
+/* Light Mode Hover */
+body:not(.uk-light) .footer-container > a:hover {
+  color: black;
+}
+body:not(.uk-light) .footer-container > a:hover .logo-icon {
+  color: black;
+}
+
+/* Dark Mode Hover */
+body.uk-light .footer-container > a:hover {
+  color: white;
+}
+body.uk-light .footer-container > a:hover .logo-icon {
+  color: white;
+}
+
+/* Optional: Ensure footer container itself is correctly placed */
+.uk-container.uk-height-viewport > .footer-container {
+  padding: 10px 16px; /* Adjust padding as needed */
+  flex-shrink: 0; /* Prevent footer from shrinking */
+  box-sizing: border-box;
+  margin-top: auto; /* Push to bottom if main content allows */
+}
+
+/* Make indicator clickable when it triggers a modal */
+.status-indicator[uk-toggle] {
+  cursor: pointer;
+} 
