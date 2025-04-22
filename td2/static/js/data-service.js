@@ -6,9 +6,7 @@ import { API } from './constants.js';
 
 export class DataService {
   constructor() {
-    this.baseUrl = window.location.protocol === 'https:' ? 
-      window.location.origin : 
-      'http://127.0.0.1:8888';
+    this.baseUrl = window.location.origin;
     
     this.fetchOptions = {
       method: 'GET',
