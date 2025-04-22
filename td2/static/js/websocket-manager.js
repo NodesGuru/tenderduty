@@ -56,9 +56,6 @@ export class WebSocketManager {
     // First try the original URL format
     const wsUrl = `${wsProtocol}${location.host}/ws`;
     
-    // For local development, uncomment the line below
-    return 'ws://127.0.0.1:8888/ws';
-    
     return wsUrl;
   }
 
