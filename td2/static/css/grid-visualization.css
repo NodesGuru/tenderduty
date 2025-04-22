@@ -1,7 +1,7 @@
 /* Grid Visualization Styles */
 :root {
   /* Light theme colors */
-  --light-text-color: #3f3f3f;
+  --light-text-color: #555;
   --light-background: #ffffff;
   --light-log-background: #dddddd;
   --light-log-text-color: #0a0a0a;
@@ -66,15 +66,24 @@ div#legend-container {
 
 /* Grid Container */
 .grid-visualization-container {
+  display: flex;
+  flex-direction: column;
   width: 100%;
-  overflow-x: auto;
-  overflow: visible;
+  overflow: visible; /* We'll handle scroll in wrapper */
 }
 
 #grid-container {
   min-width: 100%;
   padding: 10px 0;
   overflow: visible; /* Allow tooltips to overflow */
+}
+
+/* Remove inline legend-container overflow constraints */
+.grid-visualization-container #legend-container {
+  position: sticky;
+  top: 0;
+  background: var(--background);
+  z-index: 20;
 }
 
 /* Chain rows */
@@ -86,40 +95,17 @@ div#legend-container {
 }
 
 .chain-label {
-  flex: 0 0 var(--chain-label-width);
+  flex-shrink: 0; /* Prevent shrinking */
+  width: max-content; /* Size based on text */
+  max-width: 200px;   /* Limit width */
   font-size: 14px; /* Slightly smaller */
   color: var(--text-color);
   white-space: nowrap;
-  overflow: hidden;
+  overflow: hidden; /* Required for ellipsis */
   text-overflow: ellipsis;
-  padding-right: 10px;
+  padding: 5px 10px 0 0; /* Consolidate padding, keep top space */
   line-height: var(--cell-height); /* Align with block height */
-  position: relative;
-}
-
-/* Chain Label Tooltip */
-.chain-label::before {
-  content: attr(data-tooltip);
-  position: absolute;
-  bottom: 100%;
-  left: 0;
-  transform: translateY(-3px);
-  background-color: rgba(0, 0, 0, 0.85);
-  color: white;
-  padding: 4px 8px;
-  border-radius: 4px;
-  font-size: 0.85em;
-  white-space: nowrap;
-  opacity: 0;
-  visibility: hidden;
-  transition: opacity 0.2s ease, visibility 0.2s ease;
-  z-index: 25;
-  pointer-events: none;
-}
-
-.chain-label:hover::before {
-  opacity: 1;
-  visibility: visible;
+  position: relative; /* Keep for potential future use or alignment needs */
 }
 
 .blocks-container {
@@ -271,4 +257,4 @@ div#legend-container {
 /* Ensure grid container allows overflow for tooltips if needed */
 .grid-visualization-container {
   overflow: visible; /* Or adjust padding */
-} 
+}

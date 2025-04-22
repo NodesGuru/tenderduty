@@ -50,7 +50,6 @@ export class GridRenderer {
       const label = document.createElement('div');
       label.className = 'chain-label';
       label.textContent = chainStatus.name;
-      label.setAttribute('data-tooltip', chainStatus.name);
       row.appendChild(label);
       
       // Create blocks container
@@ -96,6 +95,38 @@ export class GridRenderer {
       }
     });
     
+    // After rendering all rows, adjust label widths for alignment
+    this._adjustLabelWidths();
+  }
+  
+  /**
+   * Adjusts the width of all chain labels to match the widest label
+   * @private
+   */
+  _adjustLabelWidths() {
+    if (!this.gridContainer) return;
+
+    const labels = this.gridContainer.querySelectorAll('.chain-label');
+    if (labels.length === 0) return;
+
+    // Find the maximum scrollWidth (actual content width)
+    let maxWidth = 0;
+    labels.forEach(label => {
+      // Temporarily remove fixed basis/width to measure natural width
+      label.style.flexBasis = 'auto'; 
+      label.style.width = 'auto';
+      if (label.scrollWidth > maxWidth) {
+        maxWidth = label.scrollWidth;
+      }
+    });
+
+    // Apply the max width (respecting CSS max-width via flex-basis)
+    // Add a small buffer (e.g., 1px) just in case of rounding issues
+    const finalWidth = maxWidth + 1; 
+
+    labels.forEach(label => {
+        label.style.flexBasis = `${finalWidth}px`;
+    });
   }
   
   /**
