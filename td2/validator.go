@@ -127,14 +127,25 @@ func (cc *ChainConfig) GetValInfo(first bool) (err error) {
 		}
 	}
 
-	unvotedProposalIds, err := provider.QueryUnvotedOpenProposalIds(ctx)
-	if err == nil {
-		cc.unvotedOpenGovProposalIds = unvotedProposalIds
-		if td.Prom {
-			td.statsChan <- cc.mkUpdate(metricUnvotedProposals, float64(len(cc.unvotedOpenGovProposalIds)), "")
+	if cc.Alerts.GovernanceAlerts {
+		unvotedProposalIds, err := provider.QueryUnvotedOpenProposalIds(ctx)
+		if err == nil {
+			cc.unvotedOpenGovProposalIds = unvotedProposalIds
+			if td.Prom {
+				td.statsChan <- cc.mkUpdate(metricUnvotedProposals, float64(len(cc.unvotedOpenGovProposalIds)), "")
+			}
+		} else {
+			l(err)
 		}
 	} else {
-		l(err)
+		// Clear any existing proposals when governance alerts are disabled
+		cc.unvotedOpenGovProposalIds = nil
+		if td.Prom {
+			td.statsChan <- cc.mkUpdate(metricUnvotedProposals, 0, "")
+		}
+		if first {
+			l(fmt.Sprintf("ℹ️ Governance alerts disabled for %s (%s)", cc.ValAddress, cc.valInfo.Moniker))
+		}
 	}
 
 	signingInfo, err := provider.QuerySigningInfo(ctx)
