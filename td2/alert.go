@@ -685,18 +685,21 @@ func (cc *ChainConfig) watch() {
 			unvotedProposalMap[id] = true
 		}
 
-		for _, proposalID := range cc.unvotedOpenGovProposalIds {
-			id := fmt.Sprintf(idTemplate, cc.valInfo.Valcons, proposalID)
-			alertMsg := fmt.Sprintf(msgTemplate, proposalID)
+		// Only send governance alerts if they're enabled
+		if cc.Alerts.GovernanceAlerts {
+			for _, proposalID := range cc.unvotedOpenGovProposalIds {
+				id := fmt.Sprintf(idTemplate, cc.valInfo.Valcons, proposalID)
+				alertMsg := fmt.Sprintf(msgTemplate, proposalID)
 
-			// Send alert for this specific proposal
-			td.alert(
-				cc.name,
-				alertMsg,
-				"warning",
-				false,
-				&id,
-			)
+				// Send alert for this specific proposal
+				td.alert(
+					cc.name,
+					alertMsg,
+					"warning",
+					false,
+					&id,
+				)
+			}
 		}
 
 		// check and resolve the alert if the proposal has been voted on

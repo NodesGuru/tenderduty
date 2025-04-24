@@ -127,25 +127,20 @@ func (cc *ChainConfig) GetValInfo(first bool) (err error) {
 		}
 	}
 
-	if cc.Alerts.GovernanceAlerts {
-		unvotedProposalIds, err := provider.QueryUnvotedOpenProposalIds(ctx)
-		if err == nil {
-			cc.unvotedOpenGovProposalIds = unvotedProposalIds
-			if td.Prom {
-				td.statsChan <- cc.mkUpdate(metricUnvotedProposals, float64(len(cc.unvotedOpenGovProposalIds)), "")
-			}
-		} else {
-			l(err)
+	// Query for unvoted proposals regardless of alert setting
+	unvotedProposalIds, err := provider.QueryUnvotedOpenProposalIds(ctx)
+	if err == nil {
+		cc.unvotedOpenGovProposalIds = unvotedProposalIds
+		if td.Prom {
+			td.statsChan <- cc.mkUpdate(metricUnvotedProposals, float64(len(cc.unvotedOpenGovProposalIds)), "")
 		}
 	} else {
-		// Clear any existing proposals when governance alerts are disabled
-		cc.unvotedOpenGovProposalIds = nil
-		if td.Prom {
-			td.statsChan <- cc.mkUpdate(metricUnvotedProposals, 0, "")
-		}
-		if first {
-			l(fmt.Sprintf("ℹ️ Governance alerts disabled for %s (%s)", cc.ValAddress, cc.valInfo.Moniker))
-		}
+		l(err)
+	}
+
+	// Log if governance alerts are disabled (only on first run)
+	if first && !cc.Alerts.GovernanceAlerts {
+		l(fmt.Sprintf("ℹ️ Governance alerts disabled for %s (%s)", cc.ValAddress, cc.valInfo.Moniker))
 	}
 
 	signingInfo, err := provider.QuerySigningInfo(ctx)
