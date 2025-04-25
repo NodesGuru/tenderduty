@@ -189,6 +189,9 @@ type AlertConfig struct {
 	// AlertIfNoServers: should an alert be sent if no servers are reachable?
 	AlertIfNoServers bool `yaml:"alert_if_no_servers"`
 
+	// Whether to alert on unvoted governance proposals
+	GovernanceAlerts bool `yaml:"governance_alerts"`
+
 	// PagerdutyAlerts: Should pagerduty alerts be sent for this chain? Both 'config.pagerduty.enabled: yes' and this must be set.
 	// Deprecated: use Pagerduty.Enabled instead
 	PagerdutyAlerts bool `yaml:"pagerduty_alerts"`

@@ -116,6 +116,9 @@ chains:
       # Should an alert be sent if no RPC servers are responding? (Note this alarm is instantaneous with no delay)
       alert_if_no_servers: yes
 
+      # Should alerts be sent there are open governance proposals?
+      governance_alerts: yes
+
       # for this *specific* chain it's possible to override alert settings. If the api_key or webhook addresses are empty,
       # the global settings will be used. Note, enabled must be set both globally and for each chain.
 
