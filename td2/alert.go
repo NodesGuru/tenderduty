@@ -68,7 +68,6 @@ func (a *alarmCache) clearNoBlocks(cc *ChainConfig) {
 		if strings.HasPrefix(clearAlarm, "stalled: have not seen a new block on") {
 			td.alert(
 				cc.name,
-				cc.ChainId,
 				fmt.Sprintf("stalled: have not seen a new block on %s in %d minutes", cc.ChainId, cc.Alerts.Stalled),
 				"info",
 				true,
