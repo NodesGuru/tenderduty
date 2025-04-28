@@ -11,6 +11,9 @@ hide_logs: no
 node_down_alert_minutes: 3
 # Node Down alert Pagerduty Severity
 node_down_alert_severity: critical
+# whether skip the verification of TLS certificates, when set to `yes` Tenderduty will skip certificate verification and accept self-signed certs
+# NOTE: this flag should be false in a production environment
+tls_skip_verify: no
 
 # Should the prometheus exporter be enabled?
 prometheus_enabled: yes

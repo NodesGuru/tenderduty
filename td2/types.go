@@ -52,6 +52,9 @@ type Config struct {
 	// NodeDownSeverity controls the Pagerduty severity when notifying if a node is down.
 	NodeDownSeverity string `yaml:"node_down_alert_severity"`
 
+	// whether skip the TLS verification
+	TLSSkipVerify bool `yaml:"tls_skip_verify"`
+
 	// Prom controls if the prometheus exporter is enabled.
 	Prom bool `yaml:"prometheus_enabled"`
 	// PrometheusListenPort is the port number used by the prometheus web server

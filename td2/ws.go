@@ -92,7 +92,7 @@ func (cc *ChainConfig) WsRun() {
 		break
 	}
 
-	cc.wsclient, err = NewClient(cc.client.Remote(), true)
+	cc.wsclient, err = NewClient(cc.client.Remote(), td.TLSSkipVerify)
 	if err != nil {
 		l(err)
 		cancel()

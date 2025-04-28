@@ -2,6 +2,7 @@ package tenderduty
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -289,7 +290,11 @@ func getStatusWithEndpoint(ctx context.Context, u string) (string, bool, error) 
 		return "", false, err
 	}
 
-	resp, err := http.DefaultClient.Do(req)
+	tr := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: td.TLSSkipVerify},
+	}
+	client := &http.Client{Transport: tr}
+	resp, err := client.Do(req)
 	if err != nil {
 		return "", false, err
 	}
