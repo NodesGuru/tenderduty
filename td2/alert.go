@@ -371,7 +371,7 @@ func (c *Config) alert(chainName, message, severity string, resolved bool, id *s
 		slk:          c.Slack.Enabled && c.Chains[chainName].Alerts.Slack.Enabled,
 		severity:     severity,
 		resolved:     resolved,
-		chain:        chainName,
+		chain:        fmt.Sprintf("%s (%s)", chainName, c.Chains[chainName].ChainId),
 		message:      message,
 		uniqueId:     uniq,
 		key:          c.Chains[chainName].Alerts.Pagerduty.ApiKey,
@@ -482,7 +482,7 @@ func (cc *ChainConfig) watch() {
 					false,
 					&cc.valInfo.Valcons,
 				)
-			} else if !cc.lastBlockTime.Before(time.Now().Add(time.Duration(-cc.Alerts.Stalled)*time.Minute)) {
+			} else if !cc.lastBlockTime.Before(time.Now().Add(time.Duration(-cc.Alerts.Stalled) * time.Minute)) {
 				alarms.clearNoBlocks(cc)
 				cc.lastBlockAlarm = false
 				cc.activeAlerts = alarms.getCount(cc.name)
