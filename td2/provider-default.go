@@ -2,6 +2,7 @@ package tenderduty
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -55,8 +56,12 @@ func (d *DefaultProvider) CheckIfValidatorVoted(ctx context.Context, proposalID 
 	params.Add("per_page", "1")
 
 	// Create a reusable HTTP client with timeout
+	tr := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: td.TLSSkipVerify},
+	}
 	client := &http.Client{
-		Timeout: 5 * time.Second, // Add reasonable timeout
+		Transport: tr,
+		Timeout:   5 * time.Second, // Add reasonable timeout
 	}
 
 	// Store the last error to return if all nodes fail
