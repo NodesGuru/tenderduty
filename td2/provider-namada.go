@@ -3,6 +3,7 @@ package tenderduty
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -92,8 +93,12 @@ func (d *NamadaProvider) QueryUnvotedOpenProposalIds(ctx context.Context) ([]uin
 	validatorAddress, ok2 := d.ChainConfig.Provider.Configs["validator_address"].(string)
 	if ok1 && ok2 {
 		// Create a reusable HTTP client with timeout
+		tr := &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: td.TLSSkipVerify},
+		}
 		httpClient := &http.Client{
-			Timeout: 5 * time.Second, // Add reasonable timeout
+			Transport: tr,
+			Timeout:   5 * time.Second, // Add reasonable timeout
 		}
 
 		urls := make([]string, len(indexers))
