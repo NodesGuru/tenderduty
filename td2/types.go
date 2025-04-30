@@ -71,6 +71,9 @@ type Config struct {
 	// Healthcheck information
 	Healthcheck HealthcheckConfig `yaml:"healthcheck"`
 
+	// When GovernanceAlerts is true, GovernanceAlertsReminderInterval defines how often to remind the user about unvoted proposals, every 6 hours by default
+	GovernanceAlertsReminderInterval int `yaml:"governance_alerts_reminder_interval"`
+
 	chainsMux sync.RWMutex // prevents concurrent map access for Chains
 	// Chains has settings for each validator to monitor. The map's name does not need to match the chain-id.
 	Chains map[string]*ChainConfig `yaml:"chains"`
@@ -305,6 +308,11 @@ func validateConfig(c *Config) (fatal bool, problems []string) {
 		}
 
 		v.valInfo = &ValInfo{Moniker: "not connected"}
+
+		// when undefined, or invalid, we set 6 as the default value
+		if c.GovernanceAlertsReminderInterval <= 0 {
+			c.GovernanceAlertsReminderInterval = 6
+		}
 
 		// the bools for enabling alerts are deprecated with full configs preferred,
 		// don't break if someone is still using them:

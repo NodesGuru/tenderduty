@@ -111,9 +111,6 @@ func shouldNotify(msg *alertMsg, dest notifyDest) bool {
 	defer alarms.notifyMux.Unlock()
 	var whichMap map[string]time.Time
 	var service string
-	if alarms.AllAlarms[msg.chain] == nil {
-		alarms.AllAlarms[msg.chain] = make(map[string]time.Time)
-	}
 	switch dest {
 	case pd:
 		whichMap = alarms.SentPdAlarms
@@ -131,7 +128,16 @@ func shouldNotify(msg *alertMsg, dest notifyDest) bool {
 
 	switch {
 	case !whichMap[msg.message].IsZero() && !msg.resolved:
-		// already sent this alert
+		// TODO: this is a temporary solution for sending proposal reminders, ideally we should make this feature more general and configurable
+		// Check if this is a proposal alert that should be re-sent
+		if strings.Contains(strings.ToLower(msg.message), "open proposal") {
+			// Check if it has been 6 hours since the last (re-)send
+			if whichMap[msg.message].Before(time.Now().Add(-1 * time.Duration(td.GovernanceAlertsReminderInterval) * time.Hour)) {
+				l(fmt.Sprintf("🔄 RE-SENDING ALERT on %s (%s) - notifying %s", msg.chain, msg.message, service))
+				whichMap[msg.message] = time.Now()
+				return true
+			}
+		}
 		return false
 	case !whichMap[msg.message].IsZero() && msg.resolved:
 		// alarm is cleared
