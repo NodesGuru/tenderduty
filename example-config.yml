@@ -61,6 +61,10 @@ healthcheck:
   # Rate in which pings are sent in seconds.
   ping_rate: 60
 
+# If governance_alerts for a chain is enabled, the following defines how frequently a reminder should be sent, in hours
+# Optional, the value is 6 (hours) when it is not set, but note that this cannot be configured per chain for now
+governance_alerts_reminder_interval: 6
+
 # The various chains to be monitored. Create a new entry for each chain. The name itself can be arbitrary, but a
 # user-friendly name is recommended.
 chains:
