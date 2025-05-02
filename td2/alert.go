@@ -683,19 +683,25 @@ func (cc *ChainConfig) watch() {
 
 		// there are open proposals that the validator has not voted on
 		idTemplate := "%s_gov_voting_%d"
-		msgTemplate := "[WARNING] There is an open proposal (#%v) that the validator has not voted on"
+		msgTemplate := "[WARNING] There is an open proposal (#%v) that the validator has not voted on%s"
 
 		// Create a map for faster lookups of unvoted proposal IDs
 		unvotedProposalMap := make(map[uint64]bool)
-		for _, id := range cc.unvotedOpenGovProposalIds {
-			unvotedProposalMap[id] = true
+		for _, proposal := range cc.unvotedOpenGovProposals {
+			unvotedProposalMap[proposal.ProposalId] = true
 		}
 
 		// Only send governance alerts if they're enabled
 		if cc.Alerts.GovernanceAlerts {
-			for _, proposalID := range cc.unvotedOpenGovProposalIds {
-				id := fmt.Sprintf(idTemplate, cc.valInfo.Valcons, proposalID)
-				alertMsg := fmt.Sprintf(msgTemplate, proposalID)
+			for _, proposal := range cc.unvotedOpenGovProposals {
+				id := fmt.Sprintf(idTemplate, cc.valInfo.Valcons, proposal.ProposalId)
+				deadline := fmt.Sprintf(", deadline: %s UTC", proposal.VotingEndTime.Format("2006-01-02 15:04"))
+				if cc.Provider.Name == "namada" {
+					// for Namada the voting end time might be calculated by the endEpoch so it is not super accurate
+					// currently Tenderduty considers alerts with different messages as different alerts so we have to disable this feature for Namada
+					deadline = ""
+				}
+				alertMsg := fmt.Sprintf(msgTemplate, proposal.ProposalId, deadline)
 
 				// Send alert for this specific proposal
 				td.alert(
@@ -711,7 +717,7 @@ func (cc *ChainConfig) watch() {
 		// check and resolve the alert if the proposal has been voted on
 		// compile the regex to extract proposal IDs - match any digits after "proposal (#"
 		proposalRegex := regexp.MustCompile(`proposal \(#(\d+)\)`)
-		var idsToBeResolved []string
+		messagesToBeResolved := make(map[uint64]string)
 
 		// Use RLock to safely read the alerts map
 		alarms.notifyMux.RLock()
@@ -726,7 +732,7 @@ func (cc *ChainConfig) watch() {
 					if proposalID, err := strconv.ParseUint(matches[1], 10, 64); err == nil {
 						// If this proposal ID is no longer in our unvoted list, we should clear it
 						if !unvotedProposalMap[proposalID] {
-							idsToBeResolved = append(idsToBeResolved, matches[1])
+							messagesToBeResolved[proposalID] = alertMsg
 						}
 					}
 				}
@@ -734,9 +740,8 @@ func (cc *ChainConfig) watch() {
 		}
 
 		alarms.notifyMux.RUnlock()
-		for _, proposalID := range idsToBeResolved {
+		for proposalID, alertMsg := range messagesToBeResolved {
 			id := fmt.Sprintf(idTemplate, cc.valInfo.Valcons, proposalID)
-			alertMsg := fmt.Sprintf(msgTemplate, proposalID)
 
 			td.alert(
 				cc.name,

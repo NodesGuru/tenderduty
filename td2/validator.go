@@ -128,11 +128,11 @@ func (cc *ChainConfig) GetValInfo(first bool) (err error) {
 	}
 
 	// Query for unvoted proposals regardless of alert setting
-	unvotedProposalIds, err := provider.QueryUnvotedOpenProposalIds(ctx)
+	unvotedProposals, err := provider.QueryUnvotedOpenProposals(ctx)
 	if err == nil {
-		cc.unvotedOpenGovProposalIds = unvotedProposalIds
+		cc.unvotedOpenGovProposals = unvotedProposals
 		if td.Prom {
-			td.statsChan <- cc.mkUpdate(metricUnvotedProposals, float64(len(cc.unvotedOpenGovProposalIds)), "")
+			td.statsChan <- cc.mkUpdate(metricUnvotedProposals, float64(len(cc.unvotedOpenGovProposals)), "")
 		}
 	} else {
 		l(err)

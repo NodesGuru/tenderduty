@@ -124,7 +124,7 @@ func (cc *ChainConfig) newRpc() error {
 			Height:                  0,
 			LastError:               cc.lastError,
 			Blocks:                  cc.blocksResults,
-			UnvotedOpenGovProposals: len(cc.unvotedOpenGovProposalIds),
+			UnvotedOpenGovProposals: len(cc.unvotedOpenGovProposals),
 		}
 	}
 	return errors.New("no usable endpoints available for " + cc.ChainId)

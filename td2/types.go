@@ -17,6 +17,7 @@ import (
 	"sync"
 	"time"
 
+	gov "github.com/cosmos/cosmos-sdk/x/gov/types"
 	slashing "github.com/cosmos/cosmos-sdk/x/slashing/types"
 	dash "github.com/firstset/tenderduty/v2/td2/dashboard"
 	"github.com/go-yaml/yaml"
@@ -95,20 +96,20 @@ type ProviderConfig struct {
 // ChainConfig represents a validator to be monitored on a chain, it is somewhat of a misnomer since multiple
 // validators can be monitored on a single chain.
 type ChainConfig struct {
-	name                      string
-	wsclient                  *TmConn       // custom websocket client to work around wss:// bugs in tendermint
-	client                    *rpchttp.HTTP // legit tendermint client
-	noNodes                   bool          // tracks if all nodes are down
-	valInfo                   *ValInfo      // recent validator state, only refreshed every few minutes
-	lastValInfo               *ValInfo      // use for detecting newly-jailed/tombstone
-	minSignedPerWindow        float64       // instantly see the validator risk level
-	blocksResults             []int
-	lastError                 string
-	lastBlockTime             time.Time
-	lastBlockAlarm            bool
-	lastBlockNum              int64
-	activeAlerts              int
-	unvotedOpenGovProposalIds []uint64 // the IDs of open proposals that the validator has not voted on
+	name                    string
+	wsclient                *TmConn       // custom websocket client to work around wss:// bugs in tendermint
+	client                  *rpchttp.HTTP // legit tendermint client
+	noNodes                 bool          // tracks if all nodes are down
+	valInfo                 *ValInfo      // recent validator state, only refreshed every few minutes
+	lastValInfo             *ValInfo      // use for detecting newly-jailed/tombstone
+	minSignedPerWindow      float64       // instantly see the validator risk level
+	blocksResults           []int
+	lastError               string
+	lastBlockTime           time.Time
+	lastBlockAlarm          bool
+	lastBlockNum            int64
+	activeAlerts            int
+	unvotedOpenGovProposals []gov.Proposal // the open proposals that the validator has not voted on
 
 	statTotalSigns       float64
 	statTotalProps       float64
@@ -381,7 +382,7 @@ func validateConfig(c *Config) (fatal bool, problems []string) {
 				HealthyNodes:            0,
 				ActiveAlerts:            0,
 				Blocks:                  v.blocksResults,
-				UnvotedOpenGovProposals: len(v.unvotedOpenGovProposalIds),
+				UnvotedOpenGovProposals: len(v.unvotedOpenGovProposals),
 			}
 		}
 	}
@@ -632,7 +633,7 @@ func clearStale(alarms map[string]time.Time, what string, hasPagerduty bool, hou
 }
 
 type ChainProvider interface {
-	QueryUnvotedOpenProposalIds(ctx context.Context) ([]uint64, error)
+	QueryUnvotedOpenProposals(ctx context.Context) ([]gov.Proposal, error)
 	QueryValidatorInfo(ctx context.Context) (pub []byte, moniker string, jailed bool, bonded bool, err error)
 	QuerySigningInfo(ctx context.Context) (*slashing.ValidatorSigningInfo, error)
 	QuerySlashingParams(ctx context.Context) (*slashing.Params, error)
