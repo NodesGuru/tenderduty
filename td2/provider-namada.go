@@ -11,12 +11,12 @@ import (
 	"net/http"
 	"net/url"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
 
 	cosmos_sdk_types "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/bech32"
+	gov "github.com/cosmos/cosmos-sdk/x/gov/types"
 	slashing "github.com/cosmos/cosmos-sdk/x/slashing/types"
 	namada "github.com/firstset/tenderduty/v2/td2/namada"
 	"github.com/near/borsh-go"
@@ -27,7 +27,7 @@ type NamadaProvider struct {
 	ChainConfig *ChainConfig
 }
 
-func getVotingPeriodProposalIds(httpClient *http.Client, indexers []string) ([]string, error) {
+func getVotingPeriodProposals(httpClient *http.Client, indexers []string) ([]gov.Proposal, error) {
 	// Store the last error to return if all indexer endpoints fail
 	var lastErr error
 
@@ -37,6 +37,7 @@ func getVotingPeriodProposalIds(httpClient *http.Client, indexers []string) ([]s
 
 	// Slice to store proposal IDs
 	votingPeriodProposalIds := []string{}
+	votingPeriodProposals := []gov.Proposal{}
 
 	// Try each indexer in the list
 	for _, indexer := range indexers {
@@ -58,36 +59,39 @@ func getVotingPeriodProposalIds(httpClient *http.Client, indexers []string) ([]s
 		func() {
 			defer resp.Body.Close()
 
-			var respJson map[string]any
+			var respJson namada.NamadaProposalResponse
 			if err = json.NewDecoder(resp.Body).Decode(&respJson); err != nil {
 				lastErr = err
 				return
 			}
 
-			if results, ok := respJson["results"].([]any); ok {
-				for _, proposal := range results {
-					if vMap, ok := proposal.(map[string]any); ok {
-						if id, ok := vMap["id"].(string); ok && !slices.Contains(votingPeriodProposalIds, id) {
-							votingPeriodProposalIds = append(votingPeriodProposalIds, id)
-						}
-					}
+			// Process each proposal
+			for _, namadaProposal := range respJson.Results {
+				govProposal, err := namadaProposal.ToGovProposal()
+				if err != nil {
+					// Log error but continue with other proposals
+					l(fmt.Sprintf("Failed to convert proposal %s: %v", namadaProposal.ID, err))
+					continue
+				}
+				if !slices.Contains(votingPeriodProposalIds, namadaProposal.ID) {
+					votingPeriodProposals = append(votingPeriodProposals, *govProposal)
 				}
 			}
 		}()
 
 		// If we found proposals with this node, return them
 		if len(votingPeriodProposalIds) > 0 {
-			return votingPeriodProposalIds, nil
+			return votingPeriodProposals, nil
 		}
 	}
 
-	return votingPeriodProposalIds, lastErr
+	return votingPeriodProposals, lastErr
 }
 
-func (d *NamadaProvider) QueryUnvotedOpenProposalIds(ctx context.Context) ([]uint64, error) {
+func (d *NamadaProvider) QueryUnvotedOpenProposals(ctx context.Context) ([]gov.Proposal, error) {
 	// Store the last error to return if all indexer endpoints fail
 	var lastErr error
-	var unVotedProposalIds []uint64
+	var unVotedProposals []gov.Proposal
 
 	indexers, ok1 := d.ChainConfig.Provider.Configs["indexers"].([]any)
 	validatorAddress, ok2 := d.ChainConfig.Provider.Configs["validator_address"].(string)
@@ -108,8 +112,8 @@ func (d *NamadaProvider) QueryUnvotedOpenProposalIds(ctx context.Context) ([]uin
 			}
 		}
 
-		votingPeriodProposalIds, err := getVotingPeriodProposalIds(httpClient, urls)
-		votedProposalIds := []string{}
+		votingPeriodProposals, err := getVotingPeriodProposals(httpClient, urls)
+		votedProposalIds := []float64{}
 		if err != nil {
 			return nil, err
 		}
@@ -143,25 +147,23 @@ func (d *NamadaProvider) QueryUnvotedOpenProposalIds(ctx context.Context) ([]uin
 
 				// check the voting results
 				for _, vote := range results {
-					if id, ok := vote["proposalId"].(float64); ok && !slices.Contains(votedProposalIds, strconv.Itoa(int(id))) {
-						votedProposalIds = append(votedProposalIds, strconv.Itoa(int(id)))
+					if idFloat, ok := vote["proposalId"].(float64); ok {
+						if !slices.Contains(votedProposalIds, idFloat) {
+							votedProposalIds = append(votedProposalIds, idFloat)
+						}
 					}
 				}
 			}()
 		}
 
-		for _, id := range votingPeriodProposalIds {
-			if !slices.Contains(votedProposalIds, id) {
-				if idUint, err := strconv.ParseUint(id, 10, 64); err == nil {
-					unVotedProposalIds = append(unVotedProposalIds, idUint)
-				} else {
-					l(fmt.Sprintf("🛑 error converting proposal ID %s to uint64: %v", id, err))
-				}
+		for _, proposal := range votingPeriodProposals {
+			if !slices.Contains(votedProposalIds, float64(proposal.ProposalId)) {
+				unVotedProposals = append(unVotedProposals, proposal)
 			}
 		}
 	}
 
-	return unVotedProposalIds, lastErr
+	return unVotedProposals, lastErr
 }
 
 func (d *NamadaProvider) QueryValidatorInfo(ctx context.Context) (pub []byte, moniker string, jailed bool, bonded bool, err error) {

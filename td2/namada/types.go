@@ -2,9 +2,13 @@
 package namada
 
 import (
+	"fmt"
 	"math/big"
+	"strconv"
+	"time"
 
 	"github.com/cosmos/btcutil/bech32"
+	gov "github.com/cosmos/cosmos-sdk/x/gov/types"
 	"github.com/near/borsh-go"
 )
 
@@ -217,4 +221,65 @@ type ValidatorMetaData struct {
 		Avatar        *string // URL that points to a picture identifying the validator, optional
 		Name          *string // Validator's name, optional
 	}
+}
+
+// NamadaProposalResponse represents the structure of the API response
+type NamadaProposalResponse struct {
+	Results    []NamadaProposal `json:"results"`
+	Pagination struct {
+		Page       int `json:"page"`
+		PerPage    int `json:"perPage"`
+		TotalPages int `json:"totalPages"`
+		TotalItems int `json:"totalItems"`
+	} `json:"pagination"`
+}
+
+// NamadaProposal represents a proposal in the Namada ecosystem
+type NamadaProposal struct {
+	ID              string `json:"id"`
+	Content         string `json:"content"`
+	Type            string `json:"type"`
+	TallyType       string `json:"tallyType"`
+	Data            string `json:"data"`
+	Author          string `json:"author"`
+	StartEpoch      string `json:"startEpoch"`
+	EndEpoch        string `json:"endEpoch"`
+	ActivationEpoch string `json:"activationEpoch"`
+	StartTime       string `json:"startTime"`
+	EndTime         string `json:"endTime"`
+	CurrentTime     string `json:"currentTime"`
+	ActivationTime  string `json:"activationTime"`
+	Status          string `json:"status"`
+	YayVotes        string `json:"yayVotes"`
+	NayVotes        string `json:"nayVotes"`
+	AbstainVotes    string `json:"abstainVotes"`
+}
+
+func (np *NamadaProposal) ToGovProposal() (*gov.Proposal, error) {
+	// Parse the proposal ID
+	proposalId, err := strconv.ParseUint(np.ID, 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse proposal ID: %w", err)
+	}
+
+	// Parse voting times
+	var votingStartTime, votingEndTime time.Time
+	if startTs, err := strconv.ParseInt(np.StartTime, 10, 64); err == nil {
+		votingStartTime = time.Unix(startTs, 0)
+	} else {
+		return nil, fmt.Errorf("failed to parse voting start time: %w", err)
+	}
+
+	if endTs, err := strconv.ParseInt(np.EndTime, 10, 64); err == nil {
+		votingEndTime = time.Unix(endTs, 0)
+	} else {
+		return nil, fmt.Errorf("failed to parse voting end time: %w", err)
+	}
+
+	// Create and return the gov.Proposal
+	return &gov.Proposal{
+		ProposalId:      proposalId,
+		VotingStartTime: votingStartTime,
+		VotingEndTime:   votingEndTime,
+	}, nil
 }

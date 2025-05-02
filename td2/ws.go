@@ -195,7 +195,7 @@ func (cc *ChainConfig) WsRun() {
 							Height:                  update.Height,
 							LastError:               info,
 							Blocks:                  cc.blocksResults,
-							UnvotedOpenGovProposals: len(cc.unvotedOpenGovProposalIds),
+							UnvotedOpenGovProposals: len(cc.unvotedOpenGovProposals),
 						}
 					}
 
