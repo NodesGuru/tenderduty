@@ -29,6 +29,23 @@ const (
 	staleHours = 24
 )
 
+func SeverityThresholdToSeverities(threhold string) []string {
+	severities := []string{}
+
+	switch strings.ToLower(threhold) {
+	case "critical":
+		severities = append(severities, "critical")
+	case "warning":
+		severities = append(severities, "critical", "warning")
+	case "info":
+		severities = append(severities, "critical", "warning", "info")
+	default:
+		severities = append(severities, "critical", "warning", "info")
+	}
+
+	return severities
+}
+
 // Config holds both the settings for tenderduty to monitor and state information while running.
 type Config struct {
 	alertChan  chan *alertMsg // channel used for outgoing notifications
@@ -234,31 +251,35 @@ type NodeConfig struct {
 
 // PDConfig is the information required to send alerts to PagerDuty
 type PDConfig struct {
-	Enabled         bool   `yaml:"enabled"`
-	ApiKey          string `yaml:"api_key"`
-	DefaultSeverity string `yaml:"default_severity"`
+	Enabled           bool   `yaml:"enabled"`
+	ApiKey            string `yaml:"api_key"`
+	DefaultSeverity   string `yaml:"default_severity"`
+	SeverityThreshold string `yaml:"severity_threshold"`
 }
 
 // DiscordConfig holds the information needed to publish to a Discord webhook for sending alerts
 type DiscordConfig struct {
-	Enabled  bool     `yaml:"enabled"`
-	Webhook  string   `yaml:"webhook"`
-	Mentions []string `yaml:"mentions"`
+	Enabled           bool     `yaml:"enabled"`
+	Webhook           string   `yaml:"webhook"`
+	Mentions          []string `yaml:"mentions"`
+	SeverityThreshold string   `yaml:"severity_threshold"`
 }
 
 // TeleConfig holds the information needed to publish to a Telegram webhook for sending alerts
 type TeleConfig struct {
-	Enabled  bool     `yaml:"enabled"`
-	ApiKey   string   `yaml:"api_key"`
-	Channel  string   `yaml:"channel"`
-	Mentions []string `yaml:"mentions"`
+	Enabled           bool     `yaml:"enabled"`
+	ApiKey            string   `yaml:"api_key"`
+	Channel           string   `yaml:"channel"`
+	Mentions          []string `yaml:"mentions"`
+	SeverityThreshold string   `yaml:"severity_threshold"`
 }
 
 // SlackConfig holds the information needed to publish to a Slack webhook for sending alerts
 type SlackConfig struct {
-	Enabled  bool     `yaml:"enabled"`
-	Webhook  string   `yaml:"webhook"`
-	Mentions []string `yaml:"mentions"`
+	Enabled           bool     `yaml:"enabled"`
+	Webhook           string   `yaml:"webhook"`
+	Mentions          []string `yaml:"mentions"`
+	SeverityThreshold string   `yaml:"severity_threshold"`
 }
 
 // HealthcheckConfig holds the information needed to send pings to a healthcheck endpoint
@@ -327,18 +348,41 @@ func validateConfig(c *Config) (fatal bool, problems []string) {
 			v.Alerts.Pagerduty.Enabled = true
 		}
 
+		// default values for severity thresholds
+		if c.Discord.SeverityThreshold == "" {
+			c.Discord.SeverityThreshold = "info"
+		}
+		if c.Slack.SeverityThreshold == "" {
+			c.Slack.SeverityThreshold = "info"
+		}
+		if c.Telegram.SeverityThreshold == "" {
+			c.Telegram.SeverityThreshold = "info"
+		}
+		if c.Pagerduty.SeverityThreshold == "" {
+			c.Pagerduty.SeverityThreshold = "critical"
+		}
+
 		// if the settings are blank, copy in the defaults:
 		if v.Alerts.Discord.Webhook == "" {
 			v.Alerts.Discord.Webhook = c.Discord.Webhook
 			v.Alerts.Discord.Mentions = c.Discord.Mentions
 		}
+		if v.Alerts.Discord.SeverityThreshold == "" {
+			v.Alerts.Discord.SeverityThreshold = c.Discord.SeverityThreshold
+		}
 		if v.Alerts.Slack.Webhook == "" {
 			v.Alerts.Slack.Webhook = c.Slack.Webhook
 			v.Alerts.Slack.Mentions = c.Slack.Mentions
 		}
+		if v.Alerts.Slack.SeverityThreshold == "" {
+			v.Alerts.Slack.SeverityThreshold = c.Slack.SeverityThreshold
+		}
 		if v.Alerts.Telegram.ApiKey == "" {
 			v.Alerts.Telegram.ApiKey = c.Telegram.ApiKey
 			v.Alerts.Telegram.Mentions = c.Telegram.Mentions
+		}
+		if v.Alerts.Telegram.SeverityThreshold == "" {
+			v.Alerts.Telegram.SeverityThreshold = c.Telegram.SeverityThreshold
 		}
 		if v.Alerts.Telegram.Channel == "" {
 			v.Alerts.Telegram.Channel = c.Telegram.Channel
@@ -346,6 +390,9 @@ func validateConfig(c *Config) (fatal bool, problems []string) {
 		if v.Alerts.Pagerduty.ApiKey == "" {
 			v.Alerts.Pagerduty.ApiKey = c.Pagerduty.ApiKey
 			v.Alerts.Pagerduty.DefaultSeverity = c.Pagerduty.DefaultSeverity
+		}
+		if v.Alerts.Pagerduty.SeverityThreshold == "" {
+			v.Alerts.Pagerduty.SeverityThreshold = c.Pagerduty.SeverityThreshold
 		}
 
 		switch {

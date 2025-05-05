@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -39,6 +40,8 @@ type alertMsg struct {
 
 	slkHook     string
 	slkMentions string
+
+	alertConfig *AlertConfig
 }
 
 type notifyDest uint8
@@ -69,7 +72,7 @@ func (a *alarmCache) clearNoBlocks(cc *ChainConfig) {
 			td.alert(
 				cc.name,
 				fmt.Sprintf("stalled: have not seen a new block on %s in %d minutes", cc.ChainId, cc.Alerts.Stalled),
-				"info",
+				"critical",
 				true,
 				&cc.valInfo.Valcons,
 			)
@@ -113,15 +116,27 @@ func shouldNotify(msg *alertMsg, dest notifyDest) bool {
 	var service string
 	switch dest {
 	case pd:
+		if !slices.Contains(SeverityThresholdToSeverities(msg.alertConfig.Pagerduty.SeverityThreshold), msg.severity) {
+			return false
+		}
 		whichMap = alarms.SentPdAlarms
 		service = "PagerDuty"
 	case tg:
+		if !slices.Contains(SeverityThresholdToSeverities(msg.alertConfig.Telegram.SeverityThreshold), msg.severity) {
+			return false
+		}
 		whichMap = alarms.SentTgAlarms
 		service = "Telegram"
 	case di:
+		if !slices.Contains(SeverityThresholdToSeverities(msg.alertConfig.Discord.SeverityThreshold), msg.severity) {
+			return false
+		}
 		whichMap = alarms.SentDiAlarms
 		service = "Discord"
 	case slk:
+		if !slices.Contains(SeverityThresholdToSeverities(msg.alertConfig.Slack.SeverityThreshold), msg.severity) {
+			return false
+		}
 		whichMap = alarms.SentSlkAlarms
 		service = "Slack"
 	}
@@ -387,6 +402,7 @@ func (c *Config) alert(chainName, message, severity string, resolved bool, id *s
 		discHook:     c.Chains[chainName].Alerts.Discord.Webhook,
 		discMentions: strings.Join(c.Chains[chainName].Alerts.Discord.Mentions, " "),
 		slkHook:      c.Chains[chainName].Alerts.Slack.Webhook,
+		alertConfig:  &c.Chains[chainName].Alerts,
 	}
 	c.alertChan <- a
 	c.chainsMux.RUnlock()
@@ -517,7 +533,7 @@ func (cc *ChainConfig) watch() {
 				td.alert(
 					cc.name,
 					fmt.Sprintf("%s is no longer active: validator %s is %s for chainid %s", cc.valInfo.Moniker, cc.ValAddress, inactive, cc.ChainId),
-					"info",
+					"critical",
 					true,
 					&id,
 				)
@@ -544,7 +560,7 @@ func (cc *ChainConfig) watch() {
 			td.alert(
 				cc.name,
 				fmt.Sprintf("%s has missed %d blocks on %s", cc.valInfo.Moniker, cc.Alerts.ConsecutiveMissed, cc.ChainId),
-				"info",
+				cc.Alerts.ConsecutivePriority,
 				true,
 				&id,
 			)
@@ -571,7 +587,7 @@ func (cc *ChainConfig) watch() {
 			td.alert(
 				cc.name,
 				fmt.Sprintf("%s has missed > %d%% of the slashing window's blocks on %s", cc.valInfo.Moniker, cc.Alerts.Window, cc.ChainId),
-				"info",
+				cc.Alerts.PercentagePriority,
 				true,
 				&id,
 			)
@@ -598,7 +614,7 @@ func (cc *ChainConfig) watch() {
 			td.alert(
 				cc.name,
 				fmt.Sprintf("%s has proposed %d consecutive empty blocks on %s", cc.valInfo.Moniker, cc.Alerts.ConsecutiveEmpty, cc.ChainId),
-				"info",
+				cc.Alerts.ConsecutiveEmptyPriority,
 				true,
 				&id,
 			)
@@ -640,7 +656,7 @@ func (cc *ChainConfig) watch() {
 					int(cc.statTotalPropsEmpty),
 					int(cc.statTotalProps),
 					cc.ChainId),
-				"info",
+				cc.Alerts.EmptyPercentagePriority,
 				true,
 				&id,
 			)
@@ -673,7 +689,7 @@ func (cc *ChainConfig) watch() {
 				td.alert(
 					cc.name,
 					fmt.Sprintf("Severity: %s\nRPC node %s has been down for > %d minutes on %s", td.NodeDownSeverity, node.Url, td.NodeDownMin, cc.ChainId),
-					"info",
+					td.NodeDownSeverity,
 					true,
 					&node.Url,
 				)
@@ -746,7 +762,7 @@ func (cc *ChainConfig) watch() {
 			td.alert(
 				cc.name,
 				alertMsg,
-				"info",
+				"warning",
 				true,
 				&id,
 			)

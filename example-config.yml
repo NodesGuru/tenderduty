@@ -28,6 +28,9 @@ pagerduty:
   api_key: aaaaaaaaaaaabbbbbbbbbbbbbcccccccccccc
   # Not currently used, but will be soon. This allows setting escalation priorities etc.
   default_severity: alert
+  # Severity threshold defines the minimum severity level at which the alerts are sent to this channel
+  # In Tenderduty there are three severity levels: info, warning, and critical. `severity_threshold: critical` means that Tenderduty only sends critical alerts to this channel (Pagerduty)
+  severity_threshold: critical
 
 # Discord settings
 discord:
@@ -35,6 +38,8 @@ discord:
   enabled: no
   # The webhook is set by right-clicking on a channel, editing the settings, and configuring a webhook in the intergrations section.
   webhook: https://discord.com/api/webhooks/999999999999999999/zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz
+  # Severity threshold defines the minimum severity level at which the alerts are sent to this channel
+  severity_threshold: info
 
 # Telegram settings
 telegram:
@@ -44,6 +49,8 @@ telegram:
   api_key: "5555555555:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
   # The group ID for the chat where messages will be sent. Google how to find this, will include better info later.
   channel: "-666666666"
+  # Severity threshold defines the minimum severity level at which the alerts are sent to this channel
+  severity_threshold: info
 
 # Slack settings
 slack:
@@ -51,6 +58,8 @@ slack:
   enabled: no
   # The webhook can be added in the Slack app directory.
   webhook: https://hooks.slack.com/services/AAAAAAAAAAAAAAAAAAAAAAA/bbbbbbbbbbbbbbbbbbbbbbbb
+  # Severity threshold defines the minimum severity level at which the alerts are sent to this channel
+  severity_threshold: info
 
 # Healthcheck settings (dead man's switch)
 healthcheck:
