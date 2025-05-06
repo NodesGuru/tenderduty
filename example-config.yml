@@ -20,6 +20,14 @@ prometheus_enabled: yes
 # What port should it listen on? For now only port is configurable.
 prometheus_listen_port: 28686
 
+# CoinMarketCap API key for price conversions
+coin_market_cap_api_token: xxxxxx
+# When enabled, the cryptos will be converted into a fiat currency based on its latest price
+convert_to_fiat:
+  enabled: true
+  currency: USD # or EUR, SEK, etc.
+  cache_expiration: 8 # cache the pricing data for 8 hours
+
 # Global setting for pagerduty
 pagerduty:
   # Should we use PD? Be aware that if this is set to no it overrides individual chain alerting settings.
@@ -88,6 +96,8 @@ chains:
     # Should the monitor revert to using public API endpoints if all supplied RCP nodes fail?
     # This isn't always reliable, not all public nodes have websocket proxying setup correctly.
     public_fallback: no
+    # the name/slug of this chain, used by CoinMarketCap API to convert the price
+    slug: osmosis
 
     # Controls various alert settings for each chain.
     alerts:

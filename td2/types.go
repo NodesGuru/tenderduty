@@ -13,6 +13,7 @@ import (
 	"os"
 	"path"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -20,6 +21,7 @@ import (
 	gov "github.com/cosmos/cosmos-sdk/x/gov/types"
 	slashing "github.com/cosmos/cosmos-sdk/x/slashing/types"
 	dash "github.com/firstset/tenderduty/v2/td2/dashboard"
+	utils "github.com/firstset/tenderduty/v2/td2/utils"
 	"github.com/go-yaml/yaml"
 	rpchttp "github.com/tendermint/tendermint/rpc/client/http"
 )
@@ -48,13 +50,14 @@ func SeverityThresholdToSeverities(threhold string) []string {
 
 // Config holds both the settings for tenderduty to monitor and state information while running.
 type Config struct {
-	alertChan  chan *alertMsg // channel used for outgoing notifications
-	updateChan chan *dash.ChainStatus
-	logChan    chan dash.LogMessage
-	statsChan  chan *promUpdate
-	ctx        context.Context
-	cancel     context.CancelFunc
-	alarms     *alarmCache
+	alertChan           chan *alertMsg // channel used for outgoing notifications
+	updateChan          chan *dash.ChainStatus
+	logChan             chan dash.LogMessage
+	statsChan           chan *promUpdate
+	ctx                 context.Context
+	cancel              context.CancelFunc
+	alarms              *alarmCache
+	coinMarketCapClient *utils.CoinMarketCapClient
 
 	// EnableDash enables the web dashboard
 	EnableDash bool `yaml:"enable_dashboard"`
@@ -91,6 +94,9 @@ type Config struct {
 
 	// When GovernanceAlerts is true, GovernanceAlertsReminderInterval defines how often to remind the user about unvoted proposals, every 6 hours by default
 	GovernanceAlertsReminderInterval int `yaml:"governance_alerts_reminder_interval"`
+
+	CoinMarketCapAPIToken string                `yaml:"coin_market_cap_api_token"`
+	PriceConversion       PriceConversionConfig `yaml:"convert_to_fiat"`
 
 	chainsMux sync.RWMutex // prevents concurrent map access for Chains
 	// Chains has settings for each validator to monitor. The map's name does not need to match the chain-id.
@@ -159,6 +165,8 @@ type ChainConfig struct {
 	// Provider defines what implementation should be used for checking a chain's status
 	// currently it supports two values: `default` or `namada`
 	Provider ProviderConfig `yaml:"provider"`
+	// The name/slug of this chain, used by CoinMarketCap API to convert the price
+	Slug string `yaml:"slug"`
 }
 
 // mkUpdate returns the info needed by prometheus for a gauge.
@@ -287,6 +295,12 @@ type HealthcheckConfig struct {
 	Enabled  bool          `yaml:"enabled"`
 	PingURL  string        `yaml:"ping_url"`
 	PingRate time.Duration `yaml:"ping_rate"`
+}
+
+type PriceConversionConfig struct {
+	Enabled         bool   `yaml:"enabled"`
+	Currency        string `yaml:"currency"`
+	CacheExpiration int    `yaml:"cache_expiration"`
 }
 
 // validateConfig is a non-exhaustive check for common problems with the configuration. Needs love.
@@ -659,6 +673,36 @@ func loadConfig(yamlFile, stateFile, chainConfigDirectory string, password *stri
 			if downCount == len(c.Chains[k].Nodes) {
 				c.Chains[k].noNodes = true
 			}
+		}
+	}
+
+	// init a CoinMarketCap client if needed
+	if c.PriceConversion.Enabled {
+		// Use ternary-like operation for currency selection
+		currency := "USD"
+		cacheExpiration := 8
+		if c.PriceConversion.Currency != "" {
+			currency = c.PriceConversion.Currency
+		}
+		if c.PriceConversion.CacheExpiration > 0 {
+			cacheExpiration = c.PriceConversion.CacheExpiration
+		}
+
+		// Pre-allocate slice with known capacity
+		slugs := make([]string, 0, len(c.Chains))
+		for _, chain := range c.Chains {
+			if chain.Slug != "" && !slices.Contains(slugs, strings.ToLower(chain.Slug)) {
+				slugs = append(slugs, strings.ToLower(chain.Slug))
+			}
+		}
+
+		c.coinMarketCapClient = utils.NewCoinMarketCapClient(c.CoinMarketCapAPIToken, currency, cacheExpiration, slugs)
+		_, err := c.coinMarketCapClient.GetPrices(c.ctx)
+		if err == nil {
+			l("💸 price conversion enabled")
+		} else {
+			c.PriceConversion.Enabled = false
+			l("🛑 failed to enable price conversion, found error:", err)
 		}
 	}
 
