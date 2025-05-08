@@ -2,12 +2,15 @@
 
 This is a fork of the original [Tenderduty](https://github.com/blockpane/tenderduty) repository, which is no longer maintained by the author, and we have added the following features:
 
-- **[Governance proposal monitoring.](#goverance-proposal-monitoring)** 
-   - Receive alerts when there are proposals in voting period and the validator has not voted on. The alert is resolved once the validator has voted. 
-   - Unvoted proposals are tracked and reported in the dashboard. 
+- **[Governance proposal monitoring.](#goverance-proposal-monitoring)**
+   - Receive alerts when there are proposals in voting period and the validator has not voted on. Reminders are sent periodically and the alert is resolved once the validator has voted.
+   - Unvoted proposals are tracked and reported in the dashboard.
    - A Prometheus metric is also added to monitor the number of unvoted proposals.
+- **[Configurable severity threshold per channel.](channel-severity-thresholds)** Configure different minimum notification levels for each channel (e.g. "critical" for Pagerduty, "info" and above for Telegram).
 - **[Improved support for Namada.](#support-for-namada)** Proper reporting of otherwise missing information such as the Moniker, uptime data or slashing threshold.
 - **[Pre-built binaries.](#pre-built-binaries)** Releases now include pre-built binaries for Linux and MacOS.
+- **[Design improvements.](#design-improvements)** Restyled dashboard design.
+- **[Bug fixes.]** Fixed issues, such as corner cases where alerts misfired or failed to resolve.
 
 We plan to keep maintaining and improving Tenderduty for our own use, and we encourage contributions to make it more useful.
 
@@ -132,4 +135,3 @@ wget https://github.com/Firstset/tenderduty/blob/main/example-config.yml
 # create the container, port 8888 is for the dashboard, and 28686 is for the prometheus metrics
 docker run -d --name tenderduty -p "8888:8888" -p "28686:28686" --restart unless-stopped -v $(pwd)/config.yml:/var/lib/tenderduty/config.yml -v $(pwd)/.tenderduty-state.json:/var/lib/tenderduty/.tenderduty-state.json firstset/tenderduty:latest
 ```
-
