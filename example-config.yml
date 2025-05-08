@@ -11,6 +11,9 @@ hide_logs: no
 node_down_alert_minutes: 3
 # Node Down alert Pagerduty Severity
 node_down_alert_severity: critical
+# whether skip the verification of TLS certificates, when set to `yes` Tenderduty will skip certificate verification and accept self-signed certs
+# NOTE: this flag should be false in a production environment
+tls_skip_verify: no
 
 # Should the prometheus exporter be enabled?
 prometheus_enabled: yes
@@ -25,6 +28,9 @@ pagerduty:
   api_key: aaaaaaaaaaaabbbbbbbbbbbbbcccccccccccc
   # Not currently used, but will be soon. This allows setting escalation priorities etc.
   default_severity: alert
+  # Severity threshold defines the minimum severity level at which the alerts are sent to this channel
+  # In Tenderduty there are three severity levels: info, warning, and critical. `severity_threshold: critical` means that Tenderduty only sends critical alerts to this channel (Pagerduty)
+  severity_threshold: critical
 
 # Discord settings
 discord:
@@ -32,6 +38,8 @@ discord:
   enabled: no
   # The webhook is set by right-clicking on a channel, editing the settings, and configuring a webhook in the intergrations section.
   webhook: https://discord.com/api/webhooks/999999999999999999/zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz
+  # Severity threshold defines the minimum severity level at which the alerts are sent to this channel
+  severity_threshold: info
 
 # Telegram settings
 telegram:
@@ -41,6 +49,8 @@ telegram:
   api_key: "5555555555:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
   # The group ID for the chat where messages will be sent. Google how to find this, will include better info later.
   channel: "-666666666"
+  # Severity threshold defines the minimum severity level at which the alerts are sent to this channel
+  severity_threshold: info
 
 # Slack settings
 slack:
@@ -48,6 +58,8 @@ slack:
   enabled: no
   # The webhook can be added in the Slack app directory.
   webhook: https://hooks.slack.com/services/AAAAAAAAAAAAAAAAAAAAAAA/bbbbbbbbbbbbbbbbbbbbbbbb
+  # Severity threshold defines the minimum severity level at which the alerts are sent to this channel
+  severity_threshold: info
 
 # Healthcheck settings (dead man's switch)
 healthcheck:
@@ -57,6 +69,10 @@ healthcheck:
   ping_url: https://hc-ping.com/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee
   # Rate in which pings are sent in seconds.
   ping_rate: 60
+
+# If governance_alerts for a chain is enabled, the following defines how frequently a reminder should be sent, in hours
+# Optional, the value is 6 (hours) when it is not set, but note that this cannot be configured per chain for now
+governance_alerts_reminder_interval: 6
 
 # The various chains to be monitored. Create a new entry for each chain. The name itself can be arbitrary, but a
 # user-friendly name is recommended.
@@ -115,6 +131,9 @@ chains:
       alert_if_inactive: yes
       # Should an alert be sent if no RPC servers are responding? (Note this alarm is instantaneous with no delay)
       alert_if_no_servers: yes
+
+      # Should alerts be sent there are open governance proposals?
+      governance_alerts: yes
 
       # for this *specific* chain it's possible to override alert settings. If the api_key or webhook addresses are empty,
       # the global settings will be used. Note, enabled must be set both globally and for each chain.

@@ -2,6 +2,7 @@ package tenderduty
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -91,7 +92,7 @@ func (cc *ChainConfig) WsRun() {
 		break
 	}
 
-	cc.wsclient, err = NewClient(cc.client.Remote(), true)
+	cc.wsclient, err = NewClient(cc.client.Remote(), td.TLSSkipVerify)
 	if err != nil {
 		l(err)
 		cancel()
@@ -194,7 +195,7 @@ func (cc *ChainConfig) WsRun() {
 							Height:                  update.Height,
 							LastError:               info,
 							Blocks:                  cc.blocksResults,
-							UnvotedOpenGovProposals: len(cc.unvotedOpenGovProposalIds),
+							UnvotedOpenGovProposals: len(cc.unvotedOpenGovProposals),
 						}
 					}
 
@@ -447,8 +448,18 @@ func NewClient(u string, allowInsecure bool) (*TmConn, error) {
 	// TODO: add custom UDS dialer
 	case dialUnix:
 
-	// TODO: add custom TLS dialer to allow self-signed certs.
-	// case allowInsecure && endpoint.Scheme == "wss":
+	case allowInsecure && endpoint.Scheme == "wss":
+		// Add custom TLS dialer to allow self-signed certs
+		dialer := &websocket.Dialer{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: true,
+			},
+			HandshakeTimeout: 10 * time.Second,
+		}
+		conn, _, err = dialer.Dial(endpoint.String(), nil)
+		if err != nil {
+			return nil, fmt.Errorf("could not dial wss client to %s: %s", endpoint.String(), err.Error())
+		}
 
 	default:
 		conn, _, err = websocket.DefaultDialer.Dial(endpoint.String(), nil)

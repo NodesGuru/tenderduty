@@ -2,6 +2,7 @@ package tenderduty
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -55,8 +56,12 @@ func (d *DefaultProvider) CheckIfValidatorVoted(ctx context.Context, proposalID 
 	params.Add("per_page", "1")
 
 	// Create a reusable HTTP client with timeout
+	tr := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: td.TLSSkipVerify},
+	}
 	client := &http.Client{
-		Timeout: 5 * time.Second, // Add reasonable timeout
+		Transport: tr,
+		Timeout:   5 * time.Second, // Add reasonable timeout
 	}
 
 	// Store the last error to return if all nodes fail
@@ -117,7 +122,7 @@ func (d *DefaultProvider) CheckIfValidatorVoted(ctx context.Context, proposalID 
 	return false, nil
 }
 
-func (d *DefaultProvider) QueryUnvotedOpenProposalIds(ctx context.Context) ([]uint64, error) {
+func (d *DefaultProvider) QueryUnvotedOpenProposals(ctx context.Context) ([]gov.Proposal, error) {
 	// get all proposals in voting period
 	qProposal := gov.QueryProposalsRequest{
 		// Filter for only proposals in voting period
@@ -133,7 +138,7 @@ func (d *DefaultProvider) QueryUnvotedOpenProposalIds(ctx context.Context) ([]ui
 			err = proposals.Unmarshal(resp.Response.Value)
 			if err == nil {
 				// Step 2: Filter out proposals the validator has already voted on
-				var unvotedProposalsIds []uint64
+				var unvotedProposals []gov.Proposal
 
 				for _, proposal := range proposals.Proposals {
 					// For each proposal, check if the validator has voted
@@ -148,12 +153,12 @@ func (d *DefaultProvider) QueryUnvotedOpenProposalIds(ctx context.Context) ([]ui
 						l(fmt.Sprintf("⚠️ Error checking if validator voted: %v", err))
 					}
 
-					if !hasVoted {
-						unvotedProposalsIds = append(unvotedProposalsIds, proposal.ProposalId)
+					if err == nil && !hasVoted {
+						unvotedProposals = append(unvotedProposals, proposal)
 					}
 				}
 
-				return unvotedProposalsIds, nil
+				return unvotedProposals, nil
 			}
 		}
 	}

@@ -117,6 +117,34 @@ chains:
           - https://namada-indexer.0xcryptovestor.com
 ```
 
+### Per-chain Alert Severity Threshold for Different Channels
+
+Thanks to the option `severity_threshold` in the config yaml, users are able to configure what kinds of alerts are sent to which channels. For example, if users want to receive only critical alerts on Pagerduty, but all alerts on Telegram, the following configuration can be used:
+
+```yaml
+# Global setting for pagerduty
+pagerduty:
+  severity_threshold: critical
+
+# Telegram settings
+telegram:
+  severity_threshold: info
+```
+
+Here is a list of all the alerts on Tenderduty.
+
+| AlertName                | AlertMessage                                                            | Severity                                    |
+| ------------------------ | ----------------------------------------------------------------------- | ------------------------------------------- |
+| ChainStalled             | stalled: have not seen a new block on chainX in Y minutes               | critical                                    |
+| NoRPCEndpoints           | no RPC endpoints are working for chainX                                 | critical                                    |
+| ValidatorInactive        | validator X is tombstoned for chainY                                    | critical                                    |
+| ConsecutiveBlocksMissed  | validator has missed X blocks on chainY                                 | configured via `consecutive_priority`       |
+| PercentageBlocksMissed   | validator has missed > X% of the slashing window's blocks on chainY     | configured via `percentage_priority`        |
+| ConsecutiveEmptyBlocks   | validator has proposed X consecutive empty blocks on chainY             | configured via `consecutive_empty_priority` |
+| PercentageEmptyBlocks    | validator has > X% empty blocks (Y of Z proposed blocks) on chainid ... | configured via `empty_percentage_priority`  |
+| RPCNodeDown              | RPC node X has been down for > Y minutes on chainZ                      | configured via `node_down_alert_severity`   |
+| UnvotedGoveranceProposal | There is an open proposal (#X) that the validator has not voted on      | warning                                     |
+
 ### Pre-built binaries
 
 Releases now include pre-built binaries for Linux and MacOS and ARM64/AMD64, as well as a checksum file for verifying the integrity of the downloaded files.

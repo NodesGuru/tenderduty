@@ -17,6 +17,7 @@ import (
 	"sync"
 	"time"
 
+	gov "github.com/cosmos/cosmos-sdk/x/gov/types"
 	slashing "github.com/cosmos/cosmos-sdk/x/slashing/types"
 	dash "github.com/firstset/tenderduty/v2/td2/dashboard"
 	"github.com/go-yaml/yaml"
@@ -27,6 +28,23 @@ const (
 	showBLocks = 512
 	staleHours = 24
 )
+
+func SeverityThresholdToSeverities(threhold string) []string {
+	severities := []string{}
+
+	switch strings.ToLower(threhold) {
+	case "critical":
+		severities = append(severities, "critical")
+	case "warning":
+		severities = append(severities, "critical", "warning")
+	case "info":
+		severities = append(severities, "critical", "warning", "info")
+	default:
+		severities = append(severities, "critical", "warning", "info")
+	}
+
+	return severities
+}
 
 // Config holds both the settings for tenderduty to monitor and state information while running.
 type Config struct {
@@ -52,6 +70,9 @@ type Config struct {
 	// NodeDownSeverity controls the Pagerduty severity when notifying if a node is down.
 	NodeDownSeverity string `yaml:"node_down_alert_severity"`
 
+	// whether skip the TLS verification
+	TLSSkipVerify bool `yaml:"tls_skip_verify"`
+
 	// Prom controls if the prometheus exporter is enabled.
 	Prom bool `yaml:"prometheus_enabled"`
 	// PrometheusListenPort is the port number used by the prometheus web server
@@ -67,6 +88,9 @@ type Config struct {
 	Slack SlackConfig `yaml:"slack"`
 	// Healthcheck information
 	Healthcheck HealthcheckConfig `yaml:"healthcheck"`
+
+	// When GovernanceAlerts is true, GovernanceAlertsReminderInterval defines how often to remind the user about unvoted proposals, every 6 hours by default
+	GovernanceAlertsReminderInterval int `yaml:"governance_alerts_reminder_interval"`
 
 	chainsMux sync.RWMutex // prevents concurrent map access for Chains
 	// Chains has settings for each validator to monitor. The map's name does not need to match the chain-id.
@@ -89,20 +113,20 @@ type ProviderConfig struct {
 // ChainConfig represents a validator to be monitored on a chain, it is somewhat of a misnomer since multiple
 // validators can be monitored on a single chain.
 type ChainConfig struct {
-	name                      string
-	wsclient                  *TmConn       // custom websocket client to work around wss:// bugs in tendermint
-	client                    *rpchttp.HTTP // legit tendermint client
-	noNodes                   bool          // tracks if all nodes are down
-	valInfo                   *ValInfo      // recent validator state, only refreshed every few minutes
-	lastValInfo               *ValInfo      // use for detecting newly-jailed/tombstone
-	minSignedPerWindow        float64       // instantly see the validator risk level
-	blocksResults             []int
-	lastError                 string
-	lastBlockTime             time.Time
-	lastBlockAlarm            bool
-	lastBlockNum              int64
-	activeAlerts              int
-	unvotedOpenGovProposalIds []uint64 // the IDs of open proposals that the validator has not voted on
+	name                    string
+	wsclient                *TmConn       // custom websocket client to work around wss:// bugs in tendermint
+	client                  *rpchttp.HTTP // legit tendermint client
+	noNodes                 bool          // tracks if all nodes are down
+	valInfo                 *ValInfo      // recent validator state, only refreshed every few minutes
+	lastValInfo             *ValInfo      // use for detecting newly-jailed/tombstone
+	minSignedPerWindow      float64       // instantly see the validator risk level
+	blocksResults           []int
+	lastError               string
+	lastBlockTime           time.Time
+	lastBlockAlarm          bool
+	lastBlockNum            int64
+	activeAlerts            int
+	unvotedOpenGovProposals []gov.Proposal // the open proposals that the validator has not voted on
 
 	statTotalSigns       float64
 	statTotalProps       float64
@@ -189,6 +213,9 @@ type AlertConfig struct {
 	// AlertIfNoServers: should an alert be sent if no servers are reachable?
 	AlertIfNoServers bool `yaml:"alert_if_no_servers"`
 
+	// Whether to alert on unvoted governance proposals
+	GovernanceAlerts bool `yaml:"governance_alerts"`
+
 	// PagerdutyAlerts: Should pagerduty alerts be sent for this chain? Both 'config.pagerduty.enabled: yes' and this must be set.
 	// Deprecated: use Pagerduty.Enabled instead
 	PagerdutyAlerts bool `yaml:"pagerduty_alerts"`
@@ -224,31 +251,35 @@ type NodeConfig struct {
 
 // PDConfig is the information required to send alerts to PagerDuty
 type PDConfig struct {
-	Enabled         bool   `yaml:"enabled"`
-	ApiKey          string `yaml:"api_key"`
-	DefaultSeverity string `yaml:"default_severity"`
+	Enabled           bool   `yaml:"enabled"`
+	ApiKey            string `yaml:"api_key"`
+	DefaultSeverity   string `yaml:"default_severity"`
+	SeverityThreshold string `yaml:"severity_threshold"`
 }
 
 // DiscordConfig holds the information needed to publish to a Discord webhook for sending alerts
 type DiscordConfig struct {
-	Enabled  bool     `yaml:"enabled"`
-	Webhook  string   `yaml:"webhook"`
-	Mentions []string `yaml:"mentions"`
+	Enabled           bool     `yaml:"enabled"`
+	Webhook           string   `yaml:"webhook"`
+	Mentions          []string `yaml:"mentions"`
+	SeverityThreshold string   `yaml:"severity_threshold"`
 }
 
 // TeleConfig holds the information needed to publish to a Telegram webhook for sending alerts
 type TeleConfig struct {
-	Enabled  bool     `yaml:"enabled"`
-	ApiKey   string   `yaml:"api_key"`
-	Channel  string   `yaml:"channel"`
-	Mentions []string `yaml:"mentions"`
+	Enabled           bool     `yaml:"enabled"`
+	ApiKey            string   `yaml:"api_key"`
+	Channel           string   `yaml:"channel"`
+	Mentions          []string `yaml:"mentions"`
+	SeverityThreshold string   `yaml:"severity_threshold"`
 }
 
 // SlackConfig holds the information needed to publish to a Slack webhook for sending alerts
 type SlackConfig struct {
-	Enabled  bool     `yaml:"enabled"`
-	Webhook  string   `yaml:"webhook"`
-	Mentions []string `yaml:"mentions"`
+	Enabled           bool     `yaml:"enabled"`
+	Webhook           string   `yaml:"webhook"`
+	Mentions          []string `yaml:"mentions"`
+	SeverityThreshold string   `yaml:"severity_threshold"`
 }
 
 // HealthcheckConfig holds the information needed to send pings to a healthcheck endpoint
@@ -300,6 +331,11 @@ func validateConfig(c *Config) (fatal bool, problems []string) {
 
 		v.valInfo = &ValInfo{Moniker: "not connected"}
 
+		// when undefined, or invalid, we set 6 as the default value
+		if c.GovernanceAlertsReminderInterval <= 0 {
+			c.GovernanceAlertsReminderInterval = 6
+		}
+
 		// the bools for enabling alerts are deprecated with full configs preferred,
 		// don't break if someone is still using them:
 		if v.Alerts.DiscordAlerts && !v.Alerts.Discord.Enabled {
@@ -312,18 +348,41 @@ func validateConfig(c *Config) (fatal bool, problems []string) {
 			v.Alerts.Pagerduty.Enabled = true
 		}
 
+		// default values for severity thresholds
+		if c.Discord.SeverityThreshold == "" {
+			c.Discord.SeverityThreshold = "info"
+		}
+		if c.Slack.SeverityThreshold == "" {
+			c.Slack.SeverityThreshold = "info"
+		}
+		if c.Telegram.SeverityThreshold == "" {
+			c.Telegram.SeverityThreshold = "info"
+		}
+		if c.Pagerduty.SeverityThreshold == "" {
+			c.Pagerduty.SeverityThreshold = "critical"
+		}
+
 		// if the settings are blank, copy in the defaults:
 		if v.Alerts.Discord.Webhook == "" {
 			v.Alerts.Discord.Webhook = c.Discord.Webhook
 			v.Alerts.Discord.Mentions = c.Discord.Mentions
 		}
+		if v.Alerts.Discord.SeverityThreshold == "" {
+			v.Alerts.Discord.SeverityThreshold = c.Discord.SeverityThreshold
+		}
 		if v.Alerts.Slack.Webhook == "" {
 			v.Alerts.Slack.Webhook = c.Slack.Webhook
 			v.Alerts.Slack.Mentions = c.Slack.Mentions
 		}
+		if v.Alerts.Slack.SeverityThreshold == "" {
+			v.Alerts.Slack.SeverityThreshold = c.Slack.SeverityThreshold
+		}
 		if v.Alerts.Telegram.ApiKey == "" {
 			v.Alerts.Telegram.ApiKey = c.Telegram.ApiKey
 			v.Alerts.Telegram.Mentions = c.Telegram.Mentions
+		}
+		if v.Alerts.Telegram.SeverityThreshold == "" {
+			v.Alerts.Telegram.SeverityThreshold = c.Telegram.SeverityThreshold
 		}
 		if v.Alerts.Telegram.Channel == "" {
 			v.Alerts.Telegram.Channel = c.Telegram.Channel
@@ -331,6 +390,9 @@ func validateConfig(c *Config) (fatal bool, problems []string) {
 		if v.Alerts.Pagerduty.ApiKey == "" {
 			v.Alerts.Pagerduty.ApiKey = c.Pagerduty.ApiKey
 			v.Alerts.Pagerduty.DefaultSeverity = c.Pagerduty.DefaultSeverity
+		}
+		if v.Alerts.Pagerduty.SeverityThreshold == "" {
+			v.Alerts.Pagerduty.SeverityThreshold = c.Pagerduty.SeverityThreshold
 		}
 
 		switch {
@@ -367,7 +429,7 @@ func validateConfig(c *Config) (fatal bool, problems []string) {
 				HealthyNodes:            0,
 				ActiveAlerts:            0,
 				Blocks:                  v.blocksResults,
-				UnvotedOpenGovProposals: len(v.unvotedOpenGovProposalIds),
+				UnvotedOpenGovProposals: len(v.unvotedOpenGovProposals),
 			}
 		}
 	}
@@ -618,7 +680,7 @@ func clearStale(alarms map[string]time.Time, what string, hasPagerduty bool, hou
 }
 
 type ChainProvider interface {
-	QueryUnvotedOpenProposalIds(ctx context.Context) ([]uint64, error)
+	QueryUnvotedOpenProposals(ctx context.Context) ([]gov.Proposal, error)
 	QueryValidatorInfo(ctx context.Context) (pub []byte, moniker string, jailed bool, bonded bool, err error)
 	QuerySigningInfo(ctx context.Context) (*slashing.ValidatorSigningInfo, error)
 	QuerySlashingParams(ctx context.Context) (*slashing.Params, error)
