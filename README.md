@@ -10,7 +10,7 @@ This is a fork of the original [Tenderduty](https://github.com/blockpane/tenderd
 - **[Improved support for Namada.](#support-for-namada)** Proper reporting of otherwise missing information such as the Moniker, uptime data or slashing threshold.
 - **[Pre-built binaries.](#pre-built-binaries)** Releases now include pre-built binaries for Linux and MacOS.
 - **[Design improvements.](#design-improvements)** Restyled dashboard design.
-- **[Bug fixes.]** Fixed issues, such as corner cases where alerts misfired or failed to resolve.
+- **Bug fixes.** Fixed issues, such as corner cases where alerts misfired or failed to resolve.
 
 We plan to keep maintaining and improving Tenderduty for our own use, and we encourage contributions to make it more useful.
 
