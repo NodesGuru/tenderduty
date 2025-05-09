@@ -1,0 +1,18 @@
+{
+  "babylon": {
+    "description": "The governance and utility token for the Babylon network",
+    "denom_units": [
+      {
+        "denom": "ubbn"
+      },
+      {
+        "denom": "BABY",
+        "exponent": 6
+      }
+    ],
+    "base": "ubbn",
+    "display": "BABY",
+    "name": "Babylon",
+    "symbol": "BABY"
+  }
+}
