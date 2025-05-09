@@ -70,7 +70,7 @@ func (cc *ChainConfig) fetchBankMetadataFromGitHub() (metadata *bank.Metadata, e
 	bankMetadataMap, ok2 := cache.(map[string]bank.Metadata)
 	if !ok1 || !ok2 {
 		// cache not found, fetch and cache it
-		json_file := "https://gist.githubusercontent.com/gluckzhang/4bfe149ba72d0cf16c3fa27fc1adb5b5/raw/d769c80eab03ce1d7b9cdd149d872e108c2438c2/tenderduty_bank_metadata.json"
+		json_file := "https://raw.githubusercontent.com/Firstset/tenderduty/refs/heads/main/static/tenderduty_bank_metadata.json"
 		resp, err := http.Get(json_file)
 		if err != nil {
 			return nil, fmt.Errorf("failed to fetch bank metadata from GitHub: %w", err)

@@ -4,10 +4,11 @@ import (
 	_ "embed"
 	"flag"
 	"fmt"
-	"golang.org/x/term"
 	"log"
 	"os"
 	"syscall"
+
+	"golang.org/x/term"
 
 	td2 "github.com/firstset/tenderduty/v2/td2"
 )
@@ -17,7 +18,7 @@ var defaultConfig []byte
 
 func main() {
 	var configFile, chainConfigDirectory, stateFile, encryptedFile, password string
-	var dumpConfig, encryptConfig, decryptConfig bool
+	var dumpConfig, encryptConfig, decryptConfig, devMode bool
 	flag.StringVar(&configFile, "f", "config.yml", "configuration file to use, can also be set with the ENV var 'CONFIG'")
 	flag.StringVar(&encryptedFile, "encrypted-config", "config.yml.asc", "encrypted config file, only valid with -encrypt or -decrypt flag")
 	flag.StringVar(&password, "password", "", "password to use for encrypting/decrypting the config, if unset will prompt, also can use ENV var 'PASSWORD'")
@@ -26,6 +27,7 @@ func main() {
 	flag.BoolVar(&dumpConfig, "example-config", false, "print the an example config.yml and exit")
 	flag.BoolVar(&encryptConfig, "encrypt", false, "encrypt the file specified by -f to -encrypted-config")
 	flag.BoolVar(&decryptConfig, "decrypt", false, "decrypt the file specified by -encrypted-config to -f")
+	flag.BoolVar(&devMode, "devmode", false, "start up the web server in dev mode (reading files directly instead of embeding them)")
 	flag.Parse()
 
 	if dumpConfig {
@@ -65,7 +67,7 @@ func main() {
 		os.Exit(0)
 	}
 
-	err := td2.Run(configFile, stateFile, chainConfigDirectory, &password)
+	err := td2.Run(configFile, stateFile, chainConfigDirectory, &password, devMode)
 	if err != nil {
 		log.Println(err.Error(), "... exiting.")
 	}
