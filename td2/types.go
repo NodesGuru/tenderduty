@@ -18,8 +18,11 @@ import (
 	"sync"
 	"time"
 
+	github_com_cosmos_cosmos_sdk_types "github.com/cosmos/cosmos-sdk/types"
+	bank "github.com/cosmos/cosmos-sdk/x/bank/types"
 	gov "github.com/cosmos/cosmos-sdk/x/gov/types"
 	slashing "github.com/cosmos/cosmos-sdk/x/slashing/types"
+	staking "github.com/cosmos/cosmos-sdk/x/staking/types"
 	dash "github.com/firstset/tenderduty/v2/td2/dashboard"
 	utils "github.com/firstset/tenderduty/v2/td2/utils"
 	"github.com/go-yaml/yaml"
@@ -58,6 +61,7 @@ type Config struct {
 	cancel              context.CancelFunc
 	alarms              *alarmCache
 	coinMarketCapClient *utils.CoinMarketCapClient
+	tenderdutyCache     *utils.TenderdutyCache // used for caching different kinds of data in memory, such as bank metadata quried from our GitHub repo
 
 	// EnableDash enables the web dashboard
 	EnableDash bool `yaml:"enable_dashboard"`
@@ -119,13 +123,17 @@ type ProviderConfig struct {
 // ChainConfig represents a validator to be monitored on a chain, it is somewhat of a misnomer since multiple
 // validators can be monitored on a single chain.
 type ChainConfig struct {
-	name                    string
-	wsclient                *TmConn       // custom websocket client to work around wss:// bugs in tendermint
-	client                  *rpchttp.HTTP // legit tendermint client
-	noNodes                 bool          // tracks if all nodes are down
-	valInfo                 *ValInfo      // recent validator state, only refreshed every few minutes
-	lastValInfo             *ValInfo      // use for detecting newly-jailed/tombstone
-	minSignedPerWindow      float64       // instantly see the validator risk level
+	name              string
+	wsclient          *TmConn            // custom websocket client to work around wss:// bugs in tendermint
+	client            *rpchttp.HTTP      // legit tendermint client
+	noNodes           bool               // tracks if all nodes are down
+	valInfo           *ValInfo           // recent validator state, only refreshed every few minutes
+	lastValInfo       *ValInfo           // use for detecting newly-jailed/tombstone
+	totalBondedTokens float64            // total bonded tokens on the chain
+	denomMetadata     *bank.Metadata     // chain denom metadata
+	cryptoPrice       *utils.CryptoPrice // coin price in a fiat currency
+
+	minSignedPerWindow      float64 // instantly see the validator risk level
 	blocksResults           []int
 	lastError               string
 	lastBlockTime           time.Time
@@ -444,6 +452,13 @@ func validateConfig(c *Config) (fatal bool, problems []string) {
 				ActiveAlerts:            0,
 				Blocks:                  v.blocksResults,
 				UnvotedOpenGovProposals: len(v.unvotedOpenGovProposals),
+				TotalBondedTokens:       v.totalBondedTokens,
+				VotingPowerPercent:      v.valInfo.VotingPowerPercent,
+				DelegatedTokens:         v.valInfo.DelegatedTokens,
+				CommissionRate:          v.valInfo.CommissionRate,
+				SelfDelegationRewards:   v.valInfo.SelfDelegationRewards,
+				Commission:              v.valInfo.Commission,
+				CryptoPrice:             v.cryptoPrice,
 			}
 		}
 	}
@@ -697,6 +712,7 @@ func loadConfig(yamlFile, stateFile, chainConfigDirectory string, password *stri
 		}
 
 		c.coinMarketCapClient = utils.NewCoinMarketCapClient(c.CoinMarketCapAPIToken, currency, cacheExpiration, slugs)
+		c.tenderdutyCache = utils.NewCache()
 		_, err := c.coinMarketCapClient.GetPrices(c.ctx)
 		if err == nil {
 			l("💸 price conversion enabled")
@@ -725,7 +741,10 @@ func clearStale(alarms map[string]time.Time, what string, hasPagerduty bool, hou
 
 type ChainProvider interface {
 	QueryUnvotedOpenProposals(ctx context.Context) ([]gov.Proposal, error)
-	QueryValidatorInfo(ctx context.Context) (pub []byte, moniker string, jailed bool, bonded bool, err error)
+	QueryValidatorInfo(ctx context.Context) (pub []byte, moniker string, jailed bool, bonded bool, delegatedTokens float64, commissionRate float64, err error)
 	QuerySigningInfo(ctx context.Context) (*slashing.ValidatorSigningInfo, error)
 	QuerySlashingParams(ctx context.Context) (*slashing.Params, error)
+	QueryValidatorVotingPool(ctx context.Context) (votingPool *staking.Pool, err error)
+	QueryValidatorSelfDelegationRewardsAndCommission(ctx context.Context) (rewards *github_com_cosmos_cosmos_sdk_types.DecCoins, commission *github_com_cosmos_cosmos_sdk_types.DecCoins, err error)
+	QueryDenomMetadata(ctx context.Context, denom string) (medatada *bank.Metadata, err error)
 }

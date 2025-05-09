@@ -125,6 +125,13 @@ func (cc *ChainConfig) newRpc() error {
 			LastError:               cc.lastError,
 			Blocks:                  cc.blocksResults,
 			UnvotedOpenGovProposals: len(cc.unvotedOpenGovProposals),
+			TotalBondedTokens:       cc.totalBondedTokens,
+			VotingPowerPercent:      cc.valInfo.VotingPowerPercent,
+			DelegatedTokens:         cc.valInfo.DelegatedTokens,
+			CommissionRate:          cc.valInfo.CommissionRate,
+			SelfDelegationRewards:   cc.valInfo.SelfDelegationRewards,
+			Commission:              cc.valInfo.Commission,
+			CryptoPrice:             cc.cryptoPrice,
 		}
 	}
 	return errors.New("no usable endpoints available for " + cc.ChainId)
@@ -204,14 +211,19 @@ func (cc *ChainConfig) monitorHealth(ctx context.Context, chainName string) {
 			}
 			if cc.valInfo != nil {
 				cc.lastValInfo = &ValInfo{
-					Moniker:    cc.valInfo.Moniker,
-					Bonded:     cc.valInfo.Bonded,
-					Jailed:     cc.valInfo.Jailed,
-					Tombstoned: cc.valInfo.Tombstoned,
-					Missed:     cc.valInfo.Missed,
-					Window:     cc.valInfo.Window,
-					Conspub:    cc.valInfo.Conspub,
-					Valcons:    cc.valInfo.Valcons,
+					Moniker:               cc.valInfo.Moniker,
+					Bonded:                cc.valInfo.Bonded,
+					Jailed:                cc.valInfo.Jailed,
+					Tombstoned:            cc.valInfo.Tombstoned,
+					Missed:                cc.valInfo.Missed,
+					Window:                cc.valInfo.Window,
+					Conspub:               cc.valInfo.Conspub,
+					Valcons:               cc.valInfo.Valcons,
+					DelegatedTokens:       cc.valInfo.DelegatedTokens,
+					VotingPowerPercent:    cc.valInfo.VotingPowerPercent,
+					CommissionRate:        cc.valInfo.CommissionRate,
+					SelfDelegationRewards: cc.valInfo.SelfDelegationRewards,
+					Commission:            cc.valInfo.Commission,
 				}
 			}
 			err = cc.GetValInfo(false)

@@ -13,7 +13,10 @@ import (
 
 	"github.com/cosmos/cosmos-sdk/crypto/keys/ed25519"
 	"github.com/cosmos/cosmos-sdk/crypto/keys/secp256k1"
+	github_com_cosmos_cosmos_sdk_types "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/bech32"
+	bank "github.com/cosmos/cosmos-sdk/x/bank/types"
+	distribution "github.com/cosmos/cosmos-sdk/x/distribution/types"
 	gov "github.com/cosmos/cosmos-sdk/x/gov/types"
 	slashing "github.com/cosmos/cosmos-sdk/x/slashing/types"
 	staking "github.com/cosmos/cosmos-sdk/x/staking/types"
@@ -28,7 +31,7 @@ func ConvertValopertToAccAddress(valoperAddr string) (string, error) {
 	// Decode the address
 	prefix, bytes, err := bech32.DecodeAndConvert(valoperAddr)
 	if err != nil {
-		return "", fmt.Errorf("🌟 failed to decode valoper address: %w", err)
+		return "", fmt.Errorf("🛑 failed to decode valoper address: %w", err)
 	}
 
 	// Get the base prefix by removing "valoper"
@@ -37,7 +40,7 @@ func ConvertValopertToAccAddress(valoperAddr string) (string, error) {
 	// Re-encode with the base prefix
 	accAddress, err := bech32.ConvertAndEncode(basePrefix, bytes)
 	if err != nil {
-		return "", fmt.Errorf("🌟 failed to encode account address: %w", err)
+		return "", fmt.Errorf("🛑 failed to encode account address: %w", err)
 	}
 
 	return accAddress, nil
@@ -165,15 +168,108 @@ func (d *DefaultProvider) QueryUnvotedOpenProposals(ctx context.Context) ([]gov.
 	return nil, err
 }
 
-func (d *DefaultProvider) QueryValidatorInfo(ctx context.Context) (pub []byte, moniker string, jailed bool, bonded bool, err error) {
+func (d *DefaultProvider) QueryDenomMetadata(ctx context.Context, denom string) (medatada *bank.Metadata, err error) {
+	queryParams := bank.QueryDenomMetadataRequest{
+		Denom: denom,
+	}
+	b, err := queryParams.Marshal()
+	if err != nil {
+		return nil, err
+	}
+	resp, err := d.ChainConfig.client.ABCIQuery(ctx, "/cosmos.bank.v1beta1.Query/DenomMetadata", b)
+	if err != nil {
+		return nil, err
+	}
+	if resp.Response.Value == nil {
+		return nil, errors.New("could not find denom metadata")
+	}
+	val := &bank.QueryDenomMetadataResponse{}
+	err = val.Unmarshal(resp.Response.Value)
+	if err != nil {
+		return nil, err
+	}
+	return &val.Metadata, nil
+}
+
+func (d *DefaultProvider) QueryValidatorSelfDelegationRewardsAndCommission(ctx context.Context) (rewards *github_com_cosmos_cosmos_sdk_types.DecCoins, commission *github_com_cosmos_cosmos_sdk_types.DecCoins, err error) {
+	accAddress, err := ConvertValopertToAccAddress(d.ChainConfig.ValAddress)
+	if err != nil {
+		return nil, nil, fmt.Errorf("🛑 failed to decode valoper address: %w", err)
+	}
+
+	rewardsQueryParams := distribution.QueryDelegationRewardsRequest{
+		DelegatorAddress: accAddress,
+		ValidatorAddress: d.ChainConfig.ValAddress,
+	}
+	b, err := rewardsQueryParams.Marshal()
+	if err != nil {
+		return nil, nil, err
+	}
+	resp, err := d.ChainConfig.client.ABCIQuery(ctx, "/cosmos.distribution.v1beta1.Query/DelegationRewards", b)
+	if err != nil {
+		return nil, nil, err
+	}
+	if resp.Response.Value == nil {
+		return nil, nil, errors.New("could not query self-delegation rewards for validator " + d.ChainConfig.ValAddress)
+	}
+	rewardsResponse := &distribution.QueryDelegationRewardsResponse{}
+	err = rewardsResponse.Unmarshal(resp.Response.Value)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	commissionQueryParams := distribution.QueryValidatorCommissionRequest{
+		ValidatorAddress: d.ChainConfig.ValAddress,
+	}
+	b, err = commissionQueryParams.Marshal()
+	if err != nil {
+		return nil, nil, err
+	}
+	resp, err = d.ChainConfig.client.ABCIQuery(ctx, "/cosmos.distribution.v1beta1.Query/ValidatorCommission", b)
+	if err != nil {
+		return nil, nil, err
+	}
+	if resp.Response.Value == nil {
+		return nil, nil, errors.New("could not query commission for validator " + d.ChainConfig.ValAddress)
+	}
+	commissionResponse := &distribution.QueryValidatorCommissionResponse{}
+	err = commissionResponse.Unmarshal(resp.Response.Value)
+	if err != nil {
+		return nil, nil, err
+	}
+	return &rewardsResponse.Rewards, &commissionResponse.Commission.Commission, nil
+}
+
+func (d *DefaultProvider) QueryValidatorVotingPool(ctx context.Context) (votingPool *staking.Pool, err error) {
+	queryParams := staking.QueryPoolRequest{}
+	b, err := queryParams.Marshal()
+	if err != nil {
+		return nil, err
+	}
+	resp, err := d.ChainConfig.client.ABCIQuery(ctx, "/cosmos.staking.v1beta1.Query/Pool", b)
+	if err != nil {
+		return nil, err
+	}
+	if resp.Response.Value == nil {
+		return nil, errors.New("could not query the staking pool information for validator " + d.ChainConfig.ValAddress)
+	}
+	val := &staking.QueryPoolResponse{}
+	err = val.Unmarshal(resp.Response.Value)
+	if err != nil {
+		return nil, err
+	}
+	return &val.Pool, nil
+}
+
+func (d *DefaultProvider) QueryValidatorInfo(ctx context.Context) (pub []byte, moniker string, jailed bool, bonded bool, delegatedTokens float64, commissionRate float64, err error) {
 	if strings.Contains(d.ChainConfig.ValAddress, "valcons") {
 		_, bz, err := bech32.DecodeAndConvert(d.ChainConfig.ValAddress)
 		if err != nil {
-			return nil, "", false, false, errors.New("could not decode and convert your address" + d.ChainConfig.ValAddress)
+			return nil, "", false, false, 0, 0, errors.New("could not decode and convert your address" + d.ChainConfig.ValAddress)
 		}
 
 		hexAddress := fmt.Sprintf("%X", bz)
-		return ToBytes(hexAddress), d.ChainConfig.ValAddress, false, true, nil
+		return ToBytes(hexAddress), d.ChainConfig.ValAddress, false, true, 0, 0, nil
 	}
 
 	q := staking.QueryValidatorRequest{
@@ -188,7 +284,7 @@ func (d *DefaultProvider) QueryValidatorInfo(ctx context.Context) (pub []byte, m
 		return
 	}
 	if resp.Response.Value == nil {
-		return nil, "", false, false, errors.New("could not find validator " + d.ChainConfig.ValAddress)
+		return nil, "", false, false, 0, 0, errors.New("could not find validator " + d.ChainConfig.ValAddress)
 	}
 	val := &staking.QueryValidatorResponse{}
 	err = val.Unmarshal(resp.Response.Value)
@@ -196,7 +292,7 @@ func (d *DefaultProvider) QueryValidatorInfo(ctx context.Context) (pub []byte, m
 		return
 	}
 	if val.Validator.ConsensusPubkey == nil {
-		return nil, "", false, false, errors.New("got invalid consensus pubkey for " + d.ChainConfig.ValAddress)
+		return nil, "", false, false, 0, 0, errors.New("got invalid consensus pubkey for " + d.ChainConfig.ValAddress)
 	}
 
 	pubBytes := make([]byte, 0)
@@ -217,10 +313,10 @@ func (d *DefaultProvider) QueryValidatorInfo(ctx context.Context) (pub []byte, m
 		pubBytes = pk.Address().Bytes()
 	}
 	if len(pubBytes) == 0 {
-		return nil, "", false, false, errors.New("could not get pubkey for" + d.ChainConfig.ValAddress)
+		return nil, "", false, false, 0, 0, errors.New("could not get pubkey for" + d.ChainConfig.ValAddress)
 	}
 
-	return pubBytes, val.Validator.GetMoniker(), val.Validator.Jailed, val.Validator.Status == 3, nil
+	return pubBytes, val.Validator.GetMoniker(), val.Validator.Jailed, val.Validator.Status == 3, val.Validator.Tokens.ToDec().MustFloat64(), val.Validator.Commission.Rate.MustFloat64(), nil
 }
 
 func (d *DefaultProvider) QuerySigningInfo(ctx context.Context) (*slashing.ValidatorSigningInfo, error) {

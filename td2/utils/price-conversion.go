@@ -8,6 +8,9 @@ import (
 	"net/http"
 	"sync"
 	"time"
+
+	github_com_cosmos_cosmos_sdk_types "github.com/cosmos/cosmos-sdk/types"
+	bank "github.com/cosmos/cosmos-sdk/x/bank/types"
 )
 
 const (
@@ -17,11 +20,12 @@ const (
 
 // CryptoPrice represents price data for a cryptocurrency
 type CryptoPrice struct {
-	Name        string
-	Slug        string
-	Symbol      string
-	Price       float64
-	LastUpdated time.Time
+	Name        string    `json:"name"`
+	Slug        string    `json:"slug"`
+	Symbol      string    `json:"symbol"`
+	Currency    string    `json:"currency"`
+	Price       float64   `json:"price"`
+	LastUpdated time.Time `json:"last_updated"`
 }
 
 // CMCResponse represents the structure of the CoinMarketCap API response
@@ -228,6 +232,7 @@ func (c *CoinMarketCapClient) fetchPricesFromAPI(ctx context.Context, slugs []st
 			Name:        cryptoData.Name,
 			Symbol:      cryptoData.Symbol,
 			Slug:        cryptoData.Slug,
+			Currency:    currency,
 			Price:       quoteData.Price,
 			LastUpdated: lastUpdated,
 		}
@@ -248,4 +253,90 @@ func joinStrings(strs []string, sep string) string {
 	}
 
 	return result
+}
+
+// ConvertDecCoinToDisplayUnit converts a DecCoin array to the display unit based on DenomMetadata.
+func ConvertDecCoinToDisplayUnit(coins []github_com_cosmos_cosmos_sdk_types.DecCoin, metadata bank.Metadata) (*github_com_cosmos_cosmos_sdk_types.DecCoins, error) {
+	var convertedCoins github_com_cosmos_cosmos_sdk_types.DecCoins
+
+	// Find the display denomination unit
+	var displayDenom string
+	var displayExponent uint32
+
+	// If no display is set, default to base
+	if metadata.Display == "" {
+		displayDenom = metadata.Base
+	} else {
+		displayDenom = metadata.Display
+	}
+
+	// Find the exponent for the display denom
+	foundDisplayDenom := false
+	for _, unit := range metadata.DenomUnits {
+		if unit.Denom == displayDenom {
+			displayExponent = unit.Exponent
+			foundDisplayDenom = true
+			break
+		}
+	}
+
+	if !foundDisplayDenom {
+		return nil, fmt.Errorf("display unit '%s' not found in denomination units for: %s", displayDenom, metadata.Base)
+	}
+
+	for _, coin := range coins {
+		// If the coin is already in the display denomination, just add it
+		if coin.Denom == displayDenom {
+			convertedCoins = append(convertedCoins, coin)
+			continue
+		}
+
+		// Find current coin's exponent to properly calculate conversion
+		var currentExponent uint32 = 0
+		foundCurrentDenom := false
+		for _, unit := range metadata.DenomUnits {
+			if unit.Denom == coin.Denom {
+				currentExponent = unit.Exponent
+				foundCurrentDenom = true
+				break
+			}
+		}
+
+		if !foundCurrentDenom {
+			return nil, fmt.Errorf("source denomination '%s' not found in denomination units", coin.Denom)
+		}
+
+		// Calculate the conversion factor based on exponent difference
+		var convertedAmount github_com_cosmos_cosmos_sdk_types.Dec
+
+		if currentExponent < displayExponent {
+			// Converting from smaller to larger unit (e.g., uatom -> atom)
+			// We need to divide by 10^(display_exp - current_exp)
+			exponentDiff := displayExponent - currentExponent
+
+			// Create a decimal with the proper power of 10
+			divisor := github_com_cosmos_cosmos_sdk_types.OneDec()
+			for i := uint32(0); i < exponentDiff; i++ {
+				divisor = divisor.MulInt64(10)
+			}
+
+			convertedAmount = coin.Amount.Quo(divisor)
+		} else {
+			// Converting from larger to smaller unit (e.g., atom -> uatom)
+			// We need to multiply by 10^(current_exp - display_exp)
+			exponentDiff := currentExponent - displayExponent
+
+			// Create a decimal with the proper power of 10
+			multiplier := github_com_cosmos_cosmos_sdk_types.OneDec()
+			for i := uint32(0); i < exponentDiff; i++ {
+				multiplier = multiplier.MulInt64(10)
+			}
+
+			convertedAmount = coin.Amount.Mul(multiplier)
+		}
+
+		convertedCoins = append(convertedCoins, github_com_cosmos_cosmos_sdk_types.NewDecCoinFromDec(displayDenom, convertedAmount))
+	}
+
+	return &convertedCoins, nil
 }

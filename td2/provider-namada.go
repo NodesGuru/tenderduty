@@ -15,9 +15,12 @@ import (
 	"time"
 
 	cosmos_sdk_types "github.com/cosmos/cosmos-sdk/types"
+	github_com_cosmos_cosmos_sdk_types "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/bech32"
+	bank "github.com/cosmos/cosmos-sdk/x/bank/types"
 	gov "github.com/cosmos/cosmos-sdk/x/gov/types"
 	slashing "github.com/cosmos/cosmos-sdk/x/slashing/types"
+	staking "github.com/cosmos/cosmos-sdk/x/staking/types"
 	namada "github.com/firstset/tenderduty/v2/td2/namada"
 	"github.com/near/borsh-go"
 	rpchttp "github.com/tendermint/tendermint/rpc/client/http"
@@ -166,12 +169,12 @@ func (d *NamadaProvider) QueryUnvotedOpenProposals(ctx context.Context) ([]gov.P
 	return unVotedProposals, lastErr
 }
 
-func (d *NamadaProvider) QueryValidatorInfo(ctx context.Context) (pub []byte, moniker string, jailed bool, bonded bool, err error) {
+func (d *NamadaProvider) QueryValidatorInfo(ctx context.Context) (pub []byte, moniker string, jailed bool, bonded bool, delegatedTokens float64, commissionRate float64, err error) {
 	hexAddress := ""
 	if strings.Contains(d.ChainConfig.ValAddress, "valcons") {
 		_, bz, err := bech32.DecodeAndConvert(d.ChainConfig.ValAddress)
 		if err != nil {
-			return nil, "", false, false, errors.New("could not decode and convert your address " + d.ChainConfig.ValAddress)
+			return nil, "", false, false, 0, 0, errors.New("could not decode and convert your address " + d.ChainConfig.ValAddress)
 		}
 		hexAddress = fmt.Sprintf("%X", bz)
 	}
@@ -181,13 +184,13 @@ func (d *NamadaProvider) QueryValidatorInfo(ctx context.Context) (pub []byte, mo
 	if ok {
 		response, err := d.ChainConfig.client.ABCIQuery(ctx, fmt.Sprintf("/vp/pos/validator/state/%s", validatorAddress), nil)
 		if err != nil {
-			return nil, "", false, false, errors.New("failed to query Namada validator's state " + validatorAddress)
+			return nil, "", false, false, 0, 0, errors.New("failed to query Namada validator's state " + validatorAddress)
 		}
 
 		state := namada.ValidatorStateInfo{}
 		err = borsh.Deserialize(&state, response.Response.Value)
 		if err != nil {
-			return nil, "", false, false, fmt.Errorf("unmarshal validator state: %w", err)
+			return nil, "", false, false, 0, 0, fmt.Errorf("unmarshal validator state: %w", err)
 		}
 		info := ValInfo{}
 		info.Bonded = state.State != nil && *state.State == namada.ValidatorStateConsensus
@@ -195,20 +198,20 @@ func (d *NamadaProvider) QueryValidatorInfo(ctx context.Context) (pub []byte, mo
 
 		response, err = d.ChainConfig.client.ABCIQuery(ctx, fmt.Sprintf("/vp/pos/validator/metadata/%s", validatorAddress), nil)
 		if err != nil {
-			return nil, "", false, false, fmt.Errorf("query validator metadata: %w", err)
+			return nil, "", false, false, 0, 0, fmt.Errorf("query validator metadata: %w", err)
 		}
 		metadata := namada.ValidatorMetaData{}
 		err = borsh.Deserialize(&metadata, response.Response.Value)
 		if err != nil {
-			return nil, "", false, false, fmt.Errorf("unmarshal validator metadata: %w", err)
+			return nil, "", false, false, 0, 0, fmt.Errorf("unmarshal validator metadata: %w", err)
 		}
 		if metadata.Metadata != nil && metadata.Metadata.Name != nil {
 			info.Moniker = *metadata.Metadata.Name
 		}
-		return ToBytes(hexAddress), info.Moniker, info.Jailed, info.Bonded, nil
+		return ToBytes(hexAddress), info.Moniker, info.Jailed, info.Bonded, 0, 0, nil
 	}
 
-	return ToBytes(hexAddress), d.ChainConfig.ValAddress, false, true, nil
+	return ToBytes(hexAddress), d.ChainConfig.ValAddress, false, true, 0, 0, nil
 }
 
 func getLivenessInfo(ctx context.Context, client *rpchttp.HTTP) (*namada.LivenessInfo, error) {
@@ -250,4 +253,16 @@ func (d *NamadaProvider) QuerySlashingParams(ctx context.Context) (*slashing.Par
 	}
 
 	return &slashing.Params{SignedBlocksWindow: int64(livenessInfo.LivenessWindowLen), MinSignedPerWindow: cosmos_sdk_types.MustNewDecFromStr(livenessInfo.LivenessThreshold.String())}, nil
+}
+
+func (d *NamadaProvider) QueryDenomMetadata(ctx context.Context, denom string) (medatada *bank.Metadata, err error) {
+	return nil, errors.New("Not Implemented")
+}
+
+func (d *NamadaProvider) QueryValidatorSelfDelegationRewardsAndCommission(ctx context.Context) (rewards *github_com_cosmos_cosmos_sdk_types.DecCoins, commission *github_com_cosmos_cosmos_sdk_types.DecCoins, err error) {
+	return nil, nil, errors.New("Not Implemented")
+}
+
+func (d *NamadaProvider) QueryValidatorVotingPool(ctx context.Context) (votingPool *staking.Pool, err error) {
+	return nil, errors.New("Not Implemented")
 }

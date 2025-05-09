@@ -196,6 +196,13 @@ func (cc *ChainConfig) WsRun() {
 							LastError:               info,
 							Blocks:                  cc.blocksResults,
 							UnvotedOpenGovProposals: len(cc.unvotedOpenGovProposals),
+							TotalBondedTokens:       cc.totalBondedTokens,
+							VotingPowerPercent:      cc.valInfo.VotingPowerPercent,
+							DelegatedTokens:         cc.valInfo.DelegatedTokens,
+							CommissionRate:          cc.valInfo.CommissionRate,
+							SelfDelegationRewards:   cc.valInfo.SelfDelegationRewards,
+							Commission:              cc.valInfo.Commission,
+							CryptoPrice:             cc.cryptoPrice,
 						}
 					}
 
