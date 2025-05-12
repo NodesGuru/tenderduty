@@ -13,13 +13,18 @@ import (
 	"os"
 	"path"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 	"time"
 
+	github_com_cosmos_cosmos_sdk_types "github.com/cosmos/cosmos-sdk/types"
+	bank "github.com/cosmos/cosmos-sdk/x/bank/types"
 	gov "github.com/cosmos/cosmos-sdk/x/gov/types"
 	slashing "github.com/cosmos/cosmos-sdk/x/slashing/types"
+	staking "github.com/cosmos/cosmos-sdk/x/staking/types"
 	dash "github.com/firstset/tenderduty/v2/td2/dashboard"
+	utils "github.com/firstset/tenderduty/v2/td2/utils"
 	"github.com/go-yaml/yaml"
 	rpchttp "github.com/tendermint/tendermint/rpc/client/http"
 )
@@ -48,13 +53,15 @@ func SeverityThresholdToSeverities(threhold string) []string {
 
 // Config holds both the settings for tenderduty to monitor and state information while running.
 type Config struct {
-	alertChan  chan *alertMsg // channel used for outgoing notifications
-	updateChan chan *dash.ChainStatus
-	logChan    chan dash.LogMessage
-	statsChan  chan *promUpdate
-	ctx        context.Context
-	cancel     context.CancelFunc
-	alarms     *alarmCache
+	alertChan           chan *alertMsg // channel used for outgoing notifications
+	updateChan          chan *dash.ChainStatus
+	logChan             chan dash.LogMessage
+	statsChan           chan *promUpdate
+	ctx                 context.Context
+	cancel              context.CancelFunc
+	alarms              *alarmCache
+	coinMarketCapClient *utils.CoinMarketCapClient
+	tenderdutyCache     *utils.TenderdutyCache // used for caching different kinds of data in memory, such as bank metadata quried from our GitHub repo
 
 	// EnableDash enables the web dashboard
 	EnableDash bool `yaml:"enable_dashboard"`
@@ -92,6 +99,9 @@ type Config struct {
 	// When GovernanceAlerts is true, GovernanceAlertsReminderInterval defines how often to remind the user about unvoted proposals, every 6 hours by default
 	GovernanceAlertsReminderInterval int `yaml:"governance_alerts_reminder_interval"`
 
+	CoinMarketCapAPIToken string                `yaml:"coin_market_cap_api_token"`
+	PriceConversion       PriceConversionConfig `yaml:"convert_to_fiat"`
+
 	chainsMux sync.RWMutex // prevents concurrent map access for Chains
 	// Chains has settings for each validator to monitor. The map's name does not need to match the chain-id.
 	Chains map[string]*ChainConfig `yaml:"chains"`
@@ -113,13 +123,17 @@ type ProviderConfig struct {
 // ChainConfig represents a validator to be monitored on a chain, it is somewhat of a misnomer since multiple
 // validators can be monitored on a single chain.
 type ChainConfig struct {
-	name                    string
-	wsclient                *TmConn       // custom websocket client to work around wss:// bugs in tendermint
-	client                  *rpchttp.HTTP // legit tendermint client
-	noNodes                 bool          // tracks if all nodes are down
-	valInfo                 *ValInfo      // recent validator state, only refreshed every few minutes
-	lastValInfo             *ValInfo      // use for detecting newly-jailed/tombstone
-	minSignedPerWindow      float64       // instantly see the validator risk level
+	name              string
+	wsclient          *TmConn            // custom websocket client to work around wss:// bugs in tendermint
+	client            *rpchttp.HTTP      // legit tendermint client
+	noNodes           bool               // tracks if all nodes are down
+	valInfo           *ValInfo           // recent validator state, only refreshed every few minutes
+	lastValInfo       *ValInfo           // use for detecting newly-jailed/tombstone
+	totalBondedTokens float64            // total bonded tokens on the chain
+	denomMetadata     *bank.Metadata     // chain denom metadata
+	cryptoPrice       *utils.CryptoPrice // coin price in a fiat currency
+
+	minSignedPerWindow      float64 // instantly see the validator risk level
 	blocksResults           []int
 	lastError               string
 	lastBlockTime           time.Time
@@ -159,6 +173,8 @@ type ChainConfig struct {
 	// Provider defines what implementation should be used for checking a chain's status
 	// currently it supports two values: `default` or `namada`
 	Provider ProviderConfig `yaml:"provider"`
+	// The name/slug of this chain, used by CoinMarketCap API to convert the price
+	Slug string `yaml:"slug"`
 }
 
 // mkUpdate returns the info needed by prometheus for a gauge.
@@ -215,6 +231,15 @@ type AlertConfig struct {
 
 	// Whether to alert on unvoted governance proposals
 	GovernanceAlerts bool `yaml:"governance_alerts"`
+
+	// Whether to alert when a validator's stake change goes beyond the threshold
+	StakeChangeAlerts            bool    `yaml:"stake_change_alerts"`
+	StakeChangeDropThreshold     float64 `yaml:"stake_change_drop_threshold"`
+	StakeChangeIncreaseThreshold float64 `yaml:"stake_change_increase_threshold"`
+
+	// Whether to alert when a validator has more than the threhold value of unclaimed rewards
+	UnclaimedRewardsAlerts    bool    `yaml:"unclaimed_rewards_alerts"`
+	UnclaimedRewardsThreshold float64 `yaml:"unclaimed_rewards_threshold_in_fiat_currency"`
 
 	// PagerdutyAlerts: Should pagerduty alerts be sent for this chain? Both 'config.pagerduty.enabled: yes' and this must be set.
 	// Deprecated: use Pagerduty.Enabled instead
@@ -287,6 +312,12 @@ type HealthcheckConfig struct {
 	Enabled  bool          `yaml:"enabled"`
 	PingURL  string        `yaml:"ping_url"`
 	PingRate time.Duration `yaml:"ping_rate"`
+}
+
+type PriceConversionConfig struct {
+	Enabled         bool   `yaml:"enabled"`
+	Currency        string `yaml:"currency"`
+	CacheExpiration int    `yaml:"cache_expiration"`
 }
 
 // validateConfig is a non-exhaustive check for common problems with the configuration. Needs love.
@@ -430,6 +461,13 @@ func validateConfig(c *Config) (fatal bool, problems []string) {
 				ActiveAlerts:            0,
 				Blocks:                  v.blocksResults,
 				UnvotedOpenGovProposals: len(v.unvotedOpenGovProposals),
+				TotalBondedTokens:       v.totalBondedTokens,
+				VotingPowerPercent:      v.valInfo.VotingPowerPercent,
+				DelegatedTokens:         v.valInfo.DelegatedTokens,
+				CommissionRate:          v.valInfo.CommissionRate,
+				SelfDelegationRewards:   v.valInfo.SelfDelegationRewards,
+				Commission:              v.valInfo.Commission,
+				CryptoPrice:             v.cryptoPrice,
 			}
 		}
 	}
@@ -662,6 +700,37 @@ func loadConfig(yamlFile, stateFile, chainConfigDirectory string, password *stri
 		}
 	}
 
+	// init a CoinMarketCap client if needed
+	if c.PriceConversion.Enabled {
+		// Use ternary-like operation for currency selection
+		currency := "USD"
+		cacheExpiration := 8
+		if c.PriceConversion.Currency != "" {
+			currency = c.PriceConversion.Currency
+		}
+		if c.PriceConversion.CacheExpiration > 0 {
+			cacheExpiration = c.PriceConversion.CacheExpiration
+		}
+
+		// Pre-allocate slice with known capacity
+		slugs := make([]string, 0, len(c.Chains))
+		for _, chain := range c.Chains {
+			if chain.Slug != "" && !slices.Contains(slugs, strings.ToLower(chain.Slug)) {
+				slugs = append(slugs, strings.ToLower(chain.Slug))
+			}
+		}
+
+		c.coinMarketCapClient = utils.NewCoinMarketCapClient(c.CoinMarketCapAPIToken, currency, cacheExpiration, slugs)
+		c.tenderdutyCache = utils.NewCache()
+		_, err := c.coinMarketCapClient.GetPrices(c.ctx)
+		if err == nil {
+			l("💸 price conversion enabled")
+		} else {
+			c.PriceConversion.Enabled = false
+			l("🛑 failed to enable price conversion, found error:", err)
+		}
+	}
+
 	return c, nil
 }
 
@@ -681,7 +750,10 @@ func clearStale(alarms map[string]time.Time, what string, hasPagerduty bool, hou
 
 type ChainProvider interface {
 	QueryUnvotedOpenProposals(ctx context.Context) ([]gov.Proposal, error)
-	QueryValidatorInfo(ctx context.Context) (pub []byte, moniker string, jailed bool, bonded bool, err error)
+	QueryValidatorInfo(ctx context.Context) (pub []byte, moniker string, jailed bool, bonded bool, delegatedTokens float64, commissionRate float64, err error)
 	QuerySigningInfo(ctx context.Context) (*slashing.ValidatorSigningInfo, error)
 	QuerySlashingParams(ctx context.Context) (*slashing.Params, error)
+	QueryValidatorVotingPool(ctx context.Context) (votingPool *staking.Pool, err error)
+	QueryValidatorSelfDelegationRewardsAndCommission(ctx context.Context) (rewards *github_com_cosmos_cosmos_sdk_types.DecCoins, commission *github_com_cosmos_cosmos_sdk_types.DecCoins, err error)
+	QueryDenomMetadata(ctx context.Context, denom string) (medatada *bank.Metadata, err error)
 }

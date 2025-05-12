@@ -3,24 +3,34 @@ package tenderduty
 import (
 	"context"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 	"time"
 
+	github_com_cosmos_cosmos_sdk_types "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/bech32"
+	bank "github.com/cosmos/cosmos-sdk/x/bank/types"
+	utils "github.com/firstset/tenderduty/v2/td2/utils"
 )
 
 // ValInfo holds most of the stats/info used for secondary alarms. It is refreshed roughly every minute.
 type ValInfo struct {
-	Moniker    string `json:"moniker"`
-	Bonded     bool   `json:"bonded"`
-	Jailed     bool   `json:"jailed"`
-	Tombstoned bool   `json:"tombstoned"`
-	Missed     int64  `json:"missed"`
-	Window     int64  `json:"window"`
-	Conspub    []byte `json:"conspub"`
-	Valcons    string `json:"valcons"`
+	Moniker               string                                       `json:"moniker"`
+	Bonded                bool                                         `json:"bonded"`
+	Jailed                bool                                         `json:"jailed"`
+	Tombstoned            bool                                         `json:"tombstoned"`
+	Missed                int64                                        `json:"missed"`
+	Window                int64                                        `json:"window"`
+	Conspub               []byte                                       `json:"conspub"`
+	Valcons               string                                       `json:"valcons"`
+	DelegatedTokens       float64                                      `json:"delegated_tokens"`
+	VotingPowerPercent    float64                                      `json:"voting_power_percent"`
+	CommissionRate        float64                                      `json:"commission_rate"`
+	SelfDelegationRewards *github_com_cosmos_cosmos_sdk_types.DecCoins `json:"self_delegation_rewards"`
+	Commission            *github_com_cosmos_cosmos_sdk_types.DecCoins `json:"commission"`
 }
 
 // GetMinSignedPerWindow The check the minimum signed threshold of the validator.
@@ -53,6 +63,41 @@ func (cc *ChainConfig) GetMinSignedPerWindow() (err error) {
 	return
 }
 
+func (cc *ChainConfig) fetchBankMetadataFromGitHub() (metadata *bank.Metadata, err error) {
+	cacheKey := "bank_metadata_map"
+	// try to find the data from cache first
+	cache, ok1 := td.tenderdutyCache.Get(cacheKey)
+	bankMetadataMap, ok2 := cache.(map[string]bank.Metadata)
+	if !ok1 || !ok2 {
+		// cache not found, fetch and cache it
+		json_file := "https://raw.githubusercontent.com/Firstset/tenderduty/refs/heads/main/static/tenderduty_bank_metadata.json"
+		resp, err := http.Get(json_file)
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch bank metadata from GitHub: %w", err)
+		}
+		defer resp.Body.Close()
+
+		// Check if status code is not 200 OK
+		if resp.StatusCode != http.StatusOK {
+			return nil, fmt.Errorf("failed to fetch bank metadata from GitHub: unexpected status code %d", resp.StatusCode)
+		}
+
+		decoder := json.NewDecoder(resp.Body)
+		if err := decoder.Decode(&bankMetadataMap); err != nil {
+			return nil, err
+		}
+
+		// cache the newly fetched data
+		td.tenderdutyCache.Set(cacheKey, bankMetadataMap, 12*time.Hour)
+	}
+
+	if metadata, ok := bankMetadataMap[cc.Slug]; ok {
+		return &metadata, nil
+	} else {
+		return nil, fmt.Errorf("no bank metadata found for %s in GitHub fallback", cc.Slug)
+	}
+}
+
 // GetValInfo the first bool is used to determine if extra information about the validator should be printed.
 func (cc *ChainConfig) GetValInfo(first bool) (err error) {
 	if cc.client == nil {
@@ -80,7 +125,7 @@ func (cc *ChainConfig) GetValInfo(first bool) (err error) {
 	// Fetch info from /cosmos.staking.v1beta1.Query/Validator
 	// it's easier to ask people to provide valoper since it's readily available on
 	// explorers, so make it easy and lookup the consensus key for them.
-	conspub, moniker, jailed, bonded, err := provider.QueryValidatorInfo(ctx)
+	conspub, moniker, jailed, bonded, delegatedTokens, commissionRate, err := provider.QueryValidatorInfo(ctx)
 	if err != nil {
 		return
 	}
@@ -89,6 +134,12 @@ func (cc *ChainConfig) GetValInfo(first bool) (err error) {
 	cc.valInfo.Moniker = moniker
 	cc.valInfo.Jailed = jailed
 	cc.valInfo.Bonded = bonded
+	cc.valInfo.DelegatedTokens = delegatedTokens
+	cc.valInfo.CommissionRate = commissionRate
+	cryptoPrice, err := td.coinMarketCapClient.GetPrice(ctx, cc.Slug)
+	if err == nil {
+		cc.cryptoPrice = cryptoPrice
+	}
 
 	if first && cc.valInfo.Bonded {
 		l(fmt.Sprintf("⚙️ found %s (%s) in validator set", cc.ValAddress, cc.valInfo.Moniker))
@@ -125,6 +176,62 @@ func (cc *ChainConfig) GetValInfo(first bool) (err error) {
 		if first {
 			l("⚙️", cc.ValAddress[:20], "... is using consensus key:", cc.valInfo.Valcons)
 		}
+	}
+
+	// Query the chain's voting pool information so that we can calculate the voting power later on
+	votingPool, err := provider.QueryValidatorVotingPool(ctx)
+	if err == nil {
+		cc.totalBondedTokens = votingPool.BondedTokens.ToDec().MustFloat64()
+		cc.valInfo.VotingPowerPercent = cc.valInfo.DelegatedTokens / cc.totalBondedTokens
+		// TODO:update statsChan
+	} else {
+		l(err)
+	}
+
+	// Query the chain's outstanding rewards
+	rewards, commission, err := provider.QueryValidatorSelfDelegationRewardsAndCommission(ctx)
+	if err == nil {
+		// query the chain's denom metadata, only query once since this does not change
+		if first && rewards != nil && len(*rewards) > 0 {
+			bankMeta, err := provider.QueryDenomMetadata(ctx, (*rewards)[0].Denom)
+			if err == nil {
+				cc.denomMetadata = bankMeta
+			} else {
+				l(fmt.Errorf("cannot query bank metadata for chain %s, err: %w, now fallback to query the GitHub JSON file", cc.name, err))
+				bankMeta, err = cc.fetchBankMetadataFromGitHub()
+				if err == nil {
+					cc.denomMetadata = bankMeta
+				} else {
+					l(fmt.Errorf("cannot find bank metadata for chain %s in the GitHub JSON file, err: %w", cc.name, err))
+				}
+			}
+		}
+
+		// calculate the rewards and update valInfo.OutstandingRewards
+		if cc.denomMetadata != nil && rewards != nil {
+			rewardsConverted, err := utils.ConvertDecCoinToDisplayUnit(*rewards, *cc.denomMetadata)
+			if err == nil {
+				rewards = rewardsConverted
+			} else {
+				l(fmt.Errorf("cannot convert rewards to its display unit for chain %s, err: %w, the value will remain in the base unit", cc.name, err))
+			}
+		}
+
+		if cc.denomMetadata != nil && commission != nil {
+			commissionConverted, err := utils.ConvertDecCoinToDisplayUnit(*commission, *cc.denomMetadata)
+			if err == nil {
+				commission = commissionConverted
+			} else {
+				l(fmt.Errorf("cannot convert commission to its display unit for chain %s, err: %w, the value will remain in the base unit", cc.name, err))
+			}
+		}
+
+		cc.valInfo.SelfDelegationRewards = rewards
+		cc.valInfo.Commission = commission
+
+		// TODO:update statsChan
+	} else {
+		l(fmt.Errorf("failed to query rewards and commission information for chain %s, err: %w", cc.name, err))
 	}
 
 	// Query for unvoted proposals regardless of alert setting

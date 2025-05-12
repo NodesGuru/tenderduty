@@ -14,7 +14,7 @@ import (
 
 var td = &Config{}
 
-func Run(configFile, stateFile, chainConfigDirectory string, password *string) error {
+func Run(configFile, stateFile, chainConfigDirectory string, password *string, devMode bool) error {
 	var err error
 	td, err = loadConfig(configFile, stateFile, chainConfigDirectory, password)
 	if err != nil {
@@ -61,7 +61,7 @@ func Run(configFile, stateFile, chainConfigDirectory string, password *string) e
 	}()
 
 	if td.EnableDash {
-		go dash.Serve(td.Listen, td.updateChan, td.logChan, td.HideLogs)
+		go dash.Serve(td.Listen, td.updateChan, td.logChan, td.HideLogs, devMode)
 		l("starting dashboard on", td.Listen)
 	} else {
 		go func() {

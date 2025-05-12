@@ -1,107 +1,167 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="robots" content="noindex">
-  <link rel="stylesheet" href="css/uikit.min.css" />
-  <link rel="stylesheet" href="css/grid-visualization.css" />
-  <link rel="stylesheet" href="css/custom-styles.css" />
-  <title>Tenderduty Dashboard</title>
-  <script src="js/uikit.min.js"></script>
-  <script src="./js/uikit-icons.min.js"></script>
-  <script src="./js/lodash.min.js"></script>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <link rel="stylesheet" href="css/uikit.min.css" />
+    <link rel="stylesheet" href="css/grid-visualization.css" />
+    <link rel="stylesheet" href="css/custom-styles.css" />
+    <title>Tenderduty Dashboard</title>
+    <script src="js/uikit.min.js"></script>
+    <script src="./js/uikit-icons.min.js"></script>
+    <script src="./js/lodash.min.js"></script>
 
-  <!-- Load app using ES modules -->
-  <script type="module" src="js/app.js"></script>
-  <link rel="icon" href="favicon.png">
-  <style>
-    /* Styles moved to custom-styles.css */
-  </style>
-</head>
+    <!-- Load app using ES modules -->
+    <script type="module" src="js/app.js"></script>
+    <link rel="icon" href="favicon.png" />
+    <style>
+      /* Styles moved to custom-styles.css */
+    </style>
+  </head>
 
-<!-- Start with dark theme classes -->
-<body class="uk-background-secondary uk-light">
-<div class="uk-container uk-width-expand uk-height-viewport">
+  <!-- Start with dark theme classes -->
+  <body class="uk-background-secondary uk-light">
+    <div class="uk-container uk-width-expand uk-height-viewport">
+      <!-- Main content wrapper for layout -->
+      <div class="dashboard-container">
+        <div class="uk-width-expand" id="canvasDiv">
+          <div
+            class="grid-visualization-container uk-padding-remove-horizontal"
+          >
+            <!-- Make only the grid scrollable and keep the legend fixed -->
+            <div class="scrollable-grid-wrapper">
+              <!-- Grid visualization will be rendered here -->
+              <div id="grid-container"></div>
+            </div>
 
-  <!-- Main content wrapper for layout -->
-  <div class="dashboard-container">
-
-    <div class="uk-width-expand" id="canvasDiv">
-      <div class="grid-visualization-container uk-padding-remove-horizontal">
-        <!-- Make only the grid scrollable and keep the legend fixed -->
-        <div class="scrollable-grid-wrapper">
-          <!-- Grid visualization will be rendered here -->
-          <div id="grid-container"></div>
+            <!-- Legend stays fixed above or below the grid -->
+            <div id="legend-container" class="uk-nav-center uk-padding-remove">
+              <div class="legend-item">
+                <div class="legend-block status-proposed"></div>
+                <span
+                  class="legend-label"
+                  data-tooltip="Validator proposed this block"
+                  >proposer</span
+                >
+              </div>
+              <div class="legend-item">
+                <div class="legend-block status-empty-proposed"></div>
+                <span
+                  class="legend-label"
+                  data-tooltip="Validator proposed an empty block"
+                  >proposer/empty</span
+                >
+              </div>
+              <div class="legend-item">
+                <div class="legend-block status-signed"></div>
+                <span
+                  class="legend-label"
+                  data-tooltip="Validator signed this block"
+                  >signed</span
+                >
+              </div>
+              <div class="legend-item">
+                <div class="legend-block status-miss-precommit"></div>
+                <span
+                  class="legend-label"
+                  data-tooltip="Validator missed precommit"
+                  >miss/precommit</span
+                >
+              </div>
+              <div class="legend-item">
+                <div class="legend-block status-miss-prevote"></div>
+                <span
+                  class="legend-label"
+                  data-tooltip="Validator missed prevote"
+                  >miss/prevote</span
+                >
+              </div>
+              <div class="legend-item">
+                <div class="legend-block status-missed">
+                  <div class="legend-line"></div>
+                </div>
+                <span
+                  class="legend-label"
+                  data-tooltip="Validator missed this block"
+                  >missed</span
+                >
+              </div>
+              <div class="legend-item">
+                <div class="legend-block status-no-data"></div>
+                <span
+                  class="legend-label"
+                  data-tooltip="No data available for this block"
+                  >no data</span
+                >
+              </div>
+            </div>
+          </div>
         </div>
-        
-        <!-- Legend stays fixed above or below the grid -->
-        <div id="legend-container" class="uk-nav-center uk-padding-remove">
-          <div class="legend-item">
-            <div class="legend-block status-proposed"></div>
-            <span class="legend-label" data-tooltip="Validator proposed this block">proposer</span>
-          </div>
-          <div class="legend-item">
-            <div class="legend-block status-empty-proposed"></div>
-            <span class="legend-label" data-tooltip="Validator proposed an empty block">proposer/empty</span>
-          </div>
-          <div class="legend-item">
-            <div class="legend-block status-signed"></div>
-            <span class="legend-label" data-tooltip="Validator signed this block">signed</span>
-          </div>
-          <div class="legend-item">
-            <div class="legend-block status-miss-precommit"></div>
-            <span class="legend-label" data-tooltip="Validator missed precommit">miss/precommit</span>
-          </div>
-          <div class="legend-item">
-            <div class="legend-block status-miss-prevote"></div>
-            <span class="legend-label" data-tooltip="Validator missed prevote">miss/prevote</span>
-          </div>
-          <div class="legend-item">
-            <div class="legend-block status-missed"><div class="legend-line"></div></div>
-            <span class="legend-label" data-tooltip="Validator missed this block">missed</span>
-          </div>
-          <div class="legend-item">
-            <div class="legend-block status-no-data"></div>
-            <span class="legend-label" data-tooltip="No data available for this block">no data</span>
+
+        <div class="uk-text-small uk-overflow-auto" id="tableDiv">
+          <table
+            class="uk-table uk-table-small uk-table-justify uk-padding-remove"
+            id="statusTableRoot"
+          >
+            <thead>
+              <tr>
+                <th style="text-align: center">Status</th>
+                <th>Chain</th>
+                <th>Height</th>
+                <th>Moniker</th>
+                <th>Voting Power</th>
+                <th class="uk-text-center">Unvoted Prop.</th>
+                <th class="uk-text-center">Uptime</th>
+                <th class="uk-text-center">Threshold</th>
+                <th class="uk-text-center">RPC Nodes</th>
+              </tr>
+            </thead>
+            <tbody id="statusTable"></tbody>
+          </table>
+        </div>
+
+        <!-- Collapsible Logs Section -->
+        <div id="logContainerWrapper">
+          <div class="log-container">
+            <!-- Remove inline style, CSS will handle styling based on theme -->
+            <pre id="logs" class="logs-box"></pre>
           </div>
         </div>
       </div>
-    </div>
 
-    <div class="uk-text-small uk-overflow-auto" id="tableDiv">
-      <table class="uk-table uk-table-small uk-table-justify uk-padding-remove" id="statusTableRoot">
-        <thead>
-        <tr>
-          <th style="text-align: center">Status</th>
-          <th>Chain</th>
-          <th>Height</th>
-          <th>Moniker</th>
-          <th class="uk-text-center">Unvoted Proposals</th>
-          <th class="uk-text-center">Uptime</th>
-          <th class="uk-text-center">Threshold</th>
-          <th class="uk-text-center">RPC Nodes</th>
-        </tr>
-        </thead>
-        <tbody id="statusTable"></tbody>
-      </table>
-    </div>
-
-    <!-- Collapsible Logs Section -->
-    <div id="logContainerWrapper">
-      <div class="log-container">
-        <!-- Remove inline style, CSS will handle styling based on theme -->
-        <pre id="logs" class="logs-box"></pre>
+      <div class="footer-container">
+        <a class="theme-toggle"
+          ><svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="16"
+            height="16"
+            fill="currentColor"
+            class="bi bi-brightness-high"
+            viewBox="0 0 16 16"
+          >
+            <path
+              d="M8 11a3 3 0 1 1 0-6 3 3 0 0 1 0 6zm0 1a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM8 0a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2A.5.5 0 0 1 8 0zm0 13a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2A.5.5 0 0 1 8 13zm8-5a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1 0-1h2a.5.5 0 0 1 .5.5zM3 8a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1 0-1h2A.5.5 0 0 1 3 8zm10.657-5.657a.5.5 0 0 1 0 .707l-1.414 1.415a.5.5 0 1 1-.707-.708l1.414-1.414a.5.5 0 0 1 .707 0zm-9.193 9.193a.5.5 0 0 1 0 .707L3.05 13.657a.5.5 0 0 1-.707-.707l1.414-1.414a.5.5 0 0 1 .707 0zm9.193 2.121a.5.5 0 0 1-.707 0l-1.414-1.414a.5.5 0 0 1 .707-.707l1.414 1.414a.5.5 0 0 1 0 .707zM4.464 4.465a.5.5 0 0 1-.707 0L2.343 3.05a.5.5 0 1 1 .707-.707l1.414 1.414a.5.5 0 0 1 0 .708z"
+            /></svg
+        ></a>
+        <a href="https://firstset.xyz" target="_blank"
+          ><svg
+            class="logo-icon"
+            width="46"
+            height="50"
+            viewBox="0 0 46 50"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M23.9872 16.88C26.1312 16.56 27.8272 17.008 29.0752 18.224C29.3632 18.48 29.5872 18.784 29.7472 19.136C30.0352 19.68 30.1792 20.272 30.1792 20.912C30.1792 22.64 29.4432 23.68 27.9712 24.032C27.5872 24.128 27.2192 24.128 26.8672 24.032C26.0352 23.84 25.5872 23.328 25.5232 22.496C25.5232 22.016 25.6192 21.568 25.8112 21.152C26.1312 20.576 26.4672 20.208 26.8192 20.048C26.9152 19.984 26.9792 19.936 27.0112 19.904C27.0112 19.776 26.7072 19.568 26.0992 19.28C25.3952 18.992 24.6592 18.944 23.8912 19.136C22.8352 19.424 22.0832 20.16 21.6352 21.344C21.5072 21.76 21.4432 22.192 21.4432 22.64C21.5072 23.152 21.6672 23.552 21.9232 23.84C22.1472 24.096 22.7552 24.336 23.7472 24.56C24.9632 24.848 25.7632 25.088 26.1472 25.28C27.4912 25.952 28.3872 26.992 28.8352 28.4C28.9952 28.912 29.0752 29.552 29.0752 30.32C29.0432 30.992 28.8992 31.744 28.6432 32.576C28.3872 33.344 27.9712 34.144 27.3952 34.976C26.8192 35.776 26.1632 36.432 25.4272 36.944C24.3072 37.712 23.0112 38.208 21.5392 38.432C20.6432 38.56 19.6672 38.576 18.6112 38.48C18.5472 38.448 18.4832 38.432 18.4192 38.432C16.5312 38.048 15.2352 37.344 14.5312 36.32C14.1472 35.744 13.9232 35.28 13.8592 34.928C13.7952 34.736 13.7632 34.4 13.7632 33.92C13.7312 33.216 13.8592 32.592 14.1472 32.048C14.5952 31.088 15.3632 30.512 16.4512 30.32C16.7712 30.288 17.0432 30.288 17.2672 30.32C18.2592 30.48 18.8352 31.008 18.9952 31.904C19.1552 32.864 18.8032 33.76 17.9392 34.592C17.7472 34.752 17.5552 34.88 17.3632 34.976L17.0272 35.168L17.3152 35.36C17.8592 35.808 18.5312 36.08 19.3312 36.176C20.9632 36.432 22.3392 36.128 23.4592 35.264C24.1632 34.688 24.6592 33.888 24.9472 32.864C25.0112 32.384 25.0112 31.92 24.9472 31.472C24.7232 30.736 24.2112 30.208 23.4112 29.888C23.0272 29.76 22.5152 29.632 21.8752 29.504C21.0752 29.344 20.5312 29.2 20.2432 29.072C18.8672 28.56 17.9552 27.52 17.5072 25.952C17.4432 25.664 17.4112 25.2 17.4112 24.56C17.4112 23.92 17.4432 23.44 17.5072 23.12C17.9872 21.232 18.8352 19.728 20.0512 18.608C21.1072 17.648 22.4192 17.072 23.9872 16.88ZM35.1439 30.02L35.2519 30.008H35.2639C35.3519 30.008 35.4079 30.036 35.4319 30.092C35.4399 30.124 35.1519 31.32 34.5679 33.68C33.9679 36.048 33.6679 37.236 33.6679 37.244C33.6599 37.268 33.7159 37.288 33.8359 37.304C33.9559 37.312 34.1519 37.32 34.4239 37.328C34.7359 37.328 34.9039 37.356 34.9279 37.412C34.9439 37.436 34.9319 37.528 34.8919 37.688C34.8439 37.856 34.8119 37.948 34.7959 37.964L34.7599 38H34.5679C33.6879 37.96 32.6599 37.956 31.4839 37.988C31.2119 37.996 31.0599 37.972 31.0279 37.916C31.0199 37.892 31.0319 37.8 31.0639 37.64C31.1119 37.48 31.1439 37.388 31.1599 37.364L31.2079 37.328H31.6639C32.1519 37.32 32.4359 37.288 32.5159 37.232C32.5479 37.216 32.7839 36.312 33.2239 34.52L33.8959 31.832L33.7399 31.916C33.3879 32.092 33.0399 32.192 32.6959 32.216C32.5439 32.232 32.4479 32.208 32.4079 32.144L32.3959 32.108L32.4439 31.892C32.4919 31.7 32.5359 31.592 32.5759 31.568C32.5839 31.568 32.6519 31.56 32.7799 31.544C33.0759 31.52 33.3839 31.432 33.7039 31.28C34.2239 31.016 34.6719 30.632 35.0479 30.128C35.0719 30.096 35.1039 30.06 35.1439 30.02Z"
+              fill="currentColor"
+            /></svg
+        ></a>
+        <a href="https://github.com/firstset/tenderduty" target="_blank"
+          ><span uk-icon="github"></span
+        ></a>
       </div>
     </div>
-
-  </div>
-
-  <div class="footer-container">
-    <a class="theme-toggle"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-brightness-high" viewBox="0 0 16 16"><path d="M8 11a3 3 0 1 1 0-6 3 3 0 0 1 0 6zm0 1a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM8 0a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2A.5.5 0 0 1 8 0zm0 13a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2A.5.5 0 0 1 8 13zm8-5a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1 0-1h2a.5.5 0 0 1 .5.5zM3 8a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1 0-1h2A.5.5 0 0 1 3 8zm10.657-5.657a.5.5 0 0 1 0 .707l-1.414 1.415a.5.5 0 1 1-.707-.708l1.414-1.414a.5.5 0 0 1 .707 0zm-9.193 9.193a.5.5 0 0 1 0 .707L3.05 13.657a.5.5 0 0 1-.707-.707l1.414-1.414a.5.5 0 0 1 .707 0zm9.193 2.121a.5.5 0 0 1-.707 0l-1.414-1.414a.5.5 0 0 1 .707-.707l1.414 1.414a.5.5 0 0 1 0 .707zM4.464 4.465a.5.5 0 0 1-.707 0L2.343 3.05a.5.5 0 1 1 .707-.707l1.414 1.414a.5.5 0 0 1 0 .708z"/></svg></a>
-    <a href="https://firstset.xyz" target="_blank"><svg class="logo-icon" width="46" height="50" viewBox="0 0 46 50" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M23.9872 16.88C26.1312 16.56 27.8272 17.008 29.0752 18.224C29.3632 18.48 29.5872 18.784 29.7472 19.136C30.0352 19.68 30.1792 20.272 30.1792 20.912C30.1792 22.64 29.4432 23.68 27.9712 24.032C27.5872 24.128 27.2192 24.128 26.8672 24.032C26.0352 23.84 25.5872 23.328 25.5232 22.496C25.5232 22.016 25.6192 21.568 25.8112 21.152C26.1312 20.576 26.4672 20.208 26.8192 20.048C26.9152 19.984 26.9792 19.936 27.0112 19.904C27.0112 19.776 26.7072 19.568 26.0992 19.28C25.3952 18.992 24.6592 18.944 23.8912 19.136C22.8352 19.424 22.0832 20.16 21.6352 21.344C21.5072 21.76 21.4432 22.192 21.4432 22.64C21.5072 23.152 21.6672 23.552 21.9232 23.84C22.1472 24.096 22.7552 24.336 23.7472 24.56C24.9632 24.848 25.7632 25.088 26.1472 25.28C27.4912 25.952 28.3872 26.992 28.8352 28.4C28.9952 28.912 29.0752 29.552 29.0752 30.32C29.0432 30.992 28.8992 31.744 28.6432 32.576C28.3872 33.344 27.9712 34.144 27.3952 34.976C26.8192 35.776 26.1632 36.432 25.4272 36.944C24.3072 37.712 23.0112 38.208 21.5392 38.432C20.6432 38.56 19.6672 38.576 18.6112 38.48C18.5472 38.448 18.4832 38.432 18.4192 38.432C16.5312 38.048 15.2352 37.344 14.5312 36.32C14.1472 35.744 13.9232 35.28 13.8592 34.928C13.7952 34.736 13.7632 34.4 13.7632 33.92C13.7312 33.216 13.8592 32.592 14.1472 32.048C14.5952 31.088 15.3632 30.512 16.4512 30.32C16.7712 30.288 17.0432 30.288 17.2672 30.32C18.2592 30.48 18.8352 31.008 18.9952 31.904C19.1552 32.864 18.8032 33.76 17.9392 34.592C17.7472 34.752 17.5552 34.88 17.3632 34.976L17.0272 35.168L17.3152 35.36C17.8592 35.808 18.5312 36.08 19.3312 36.176C20.9632 36.432 22.3392 36.128 23.4592 35.264C24.1632 34.688 24.6592 33.888 24.9472 32.864C25.0112 32.384 25.0112 31.92 24.9472 31.472C24.7232 30.736 24.2112 30.208 23.4112 29.888C23.0272 29.76 22.5152 29.632 21.8752 29.504C21.0752 29.344 20.5312 29.2 20.2432 29.072C18.8672 28.56 17.9552 27.52 17.5072 25.952C17.4432 25.664 17.4112 25.2 17.4112 24.56C17.4112 23.92 17.4432 23.44 17.5072 23.12C17.9872 21.232 18.8352 19.728 20.0512 18.608C21.1072 17.648 22.4192 17.072 23.9872 16.88ZM35.1439 30.02L35.2519 30.008H35.2639C35.3519 30.008 35.4079 30.036 35.4319 30.092C35.4399 30.124 35.1519 31.32 34.5679 33.68C33.9679 36.048 33.6679 37.236 33.6679 37.244C33.6599 37.268 33.7159 37.288 33.8359 37.304C33.9559 37.312 34.1519 37.32 34.4239 37.328C34.7359 37.328 34.9039 37.356 34.9279 37.412C34.9439 37.436 34.9319 37.528 34.8919 37.688C34.8439 37.856 34.8119 37.948 34.7959 37.964L34.7599 38H34.5679C33.6879 37.96 32.6599 37.956 31.4839 37.988C31.2119 37.996 31.0599 37.972 31.0279 37.916C31.0199 37.892 31.0319 37.8 31.0639 37.64C31.1119 37.48 31.1439 37.388 31.1599 37.364L31.2079 37.328H31.6639C32.1519 37.32 32.4359 37.288 32.5159 37.232C32.5479 37.216 32.7839 36.312 33.2239 34.52L33.8959 31.832L33.7399 31.916C33.3879 32.092 33.0399 32.192 32.6959 32.216C32.5439 32.232 32.4479 32.208 32.4079 32.144L32.3959 32.108L32.4439 31.892C32.4919 31.7 32.5359 31.592 32.5759 31.568C32.5839 31.568 32.6519 31.56 32.7799 31.544C33.0759 31.52 33.3839 31.432 33.7039 31.28C34.2239 31.016 34.6719 30.632 35.0479 30.128C35.0719 30.096 35.1039 30.06 35.1439 30.02Z" fill="currentColor"/></svg></a>
-    <a href="https://github.com/firstset/tenderduty" target="_blank"><span uk-icon="github"></span></a>
-  </div>
-</div>
-</body>
+  </body>
 </html>

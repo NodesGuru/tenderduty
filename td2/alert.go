@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math"
 	"net/http"
 	"regexp"
 	"slices"
@@ -15,6 +16,7 @@ import (
 	"time"
 
 	"github.com/PagerDuty/go-pagerduty"
+	github_com_cosmos_cosmos_sdk_types "github.com/cosmos/cosmos-sdk/types"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
@@ -424,7 +426,7 @@ func (c *Config) alert(chainName, message, severity string, resolved bool, id *s
 // and also updates a few prometheus stats
 // FIXME: not watching for nodes that are lagging the head block!
 func (cc *ChainConfig) watch() {
-	var missedAlarm, pctAlarm, noNodes, emptyBlocksAlarm, emptyPctAlarm bool
+	var missedAlarm, pctAlarm, noNodes, emptyBlocksAlarm, emptyPctAlarm, stakeChangeAlarm, unclaimedRewardsAlarm bool
 	inactive := "jailed"
 	nodeAlarms := make(map[string]bool)
 
@@ -693,6 +695,57 @@ func (cc *ChainConfig) watch() {
 					true,
 					&node.Url,
 				)
+				cc.activeAlerts = alarms.getCount(cc.name)
+			}
+		}
+
+		// validator stake change alerts
+		if cc.Alerts.StakeChangeAlerts && cc.valInfo != nil && cc.lastValInfo != nil {
+			stakeChangePercent := (cc.valInfo.DelegatedTokens - cc.lastValInfo.DelegatedTokens) / cc.lastValInfo.DelegatedTokens
+			trend := "increased"
+			threshold := cc.Alerts.StakeChangeIncreaseThreshold
+			if stakeChangePercent < 0 {
+				trend = "dropped"
+				threshold = cc.Alerts.StakeChangeDropThreshold
+			}
+			id := cc.valInfo.Valcons + "_stake_change"
+			severity := "warning"
+			message := fmt.Sprintf("%s's stake has %s more than %.1g%% compared to the previous check", cc.valInfo.Moniker, trend, threshold*100)
+			if math.Abs(stakeChangePercent) >= threshold {
+				td.alert(cc.name, message, severity, false, &id)
+				stakeChangeAlarm = true
+			} else {
+				if stakeChangeAlarm {
+					td.alert(cc.name, message, severity, true, &id)
+					stakeChangeAlarm = false
+
+				}
+			}
+		}
+
+		// validator unclaimed rewards alert
+		if cc.Alerts.UnclaimedRewardsAlerts && td.PriceConversion.Enabled && cc.valInfo.SelfDelegationRewards != nil && cc.valInfo.Commission != nil {
+			totalRewards := github_com_cosmos_cosmos_sdk_types.DecCoin{
+				Denom:  (*cc.valInfo.SelfDelegationRewards)[0].Denom,
+				Amount: github_com_cosmos_cosmos_sdk_types.ZeroDec(),
+			}
+			totalRewards = totalRewards.Add((*cc.valInfo.SelfDelegationRewards)[0])
+			totalRewards = totalRewards.Add((*cc.valInfo.Commission)[0])
+			coinPrice, err := td.coinMarketCapClient.GetPrice(td.ctx, cc.Slug)
+			if err == nil {
+				totalRewardsConverted := totalRewards.Amount.MustFloat64() * coinPrice.Price
+				id := cc.valInfo.Valcons + "_unclaimed_rewards"
+				severity := "warning"
+				message := fmt.Sprintf("%s has more than %.0f %s unclaimed rewards", cc.valInfo.Moniker, cc.Alerts.UnclaimedRewardsThreshold, td.PriceConversion.Currency)
+				if totalRewardsConverted > cc.Alerts.UnclaimedRewardsThreshold {
+					td.alert(cc.name, message, severity, false, &id)
+					unclaimedRewardsAlarm = true
+				} else {
+					if unclaimedRewardsAlarm {
+						td.alert(cc.name, message, severity, true, &id)
+						unclaimedRewardsAlarm = false
+					}
+				}
 				cc.activeAlerts = alarms.getCount(cc.name)
 			}
 		}
