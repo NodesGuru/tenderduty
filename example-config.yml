@@ -145,6 +145,16 @@ chains:
       # Should alerts be sent there are open governance proposals?
       governance_alerts: yes
 
+      # Alert when a validator's stake change goes beyond the threshold
+      stake_change_alerts: yes
+      stake_change_drop_threshold: 0.1 # meaning 10%
+      stake_change_increase_threshold: 0.1 # meaning 10%
+
+      # Alert when a validator has more than the threhold value of unclaimed rewards
+      # The threshold is defined with a fiat currency unit like USD, so this feature requires properly configuring coin_market_cap_api_token and enabling convert_to_fiat
+      unclaimed_rewards_alerts: yes
+      unclaimed_rewards_threshold_in_fiat_currency: 10000
+
       # for this *specific* chain it's possible to override alert settings. If the api_key or webhook addresses are empty,
       # the global settings will be used. Note, enabled must be set both globally and for each chain.
 

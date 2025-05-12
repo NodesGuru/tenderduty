@@ -232,6 +232,15 @@ type AlertConfig struct {
 	// Whether to alert on unvoted governance proposals
 	GovernanceAlerts bool `yaml:"governance_alerts"`
 
+	// Whether to alert when a validator's stake change goes beyond the threshold
+	StakeChangeAlerts            bool    `yaml:"stake_change_alerts"`
+	StakeChangeDropThreshold     float64 `yaml:"stake_change_drop_threshold"`
+	StakeChangeIncreaseThreshold float64 `yaml:"stake_change_increase_threshold"`
+
+	// Whether to alert when a validator has more than the threhold value of unclaimed rewards
+	UnclaimedRewardsAlerts    bool    `yaml:"unclaimed_rewards_alerts"`
+	UnclaimedRewardsThreshold float64 `yaml:"unclaimed_rewards_threshold_in_fiat_currency"`
+
 	// PagerdutyAlerts: Should pagerduty alerts be sent for this chain? Both 'config.pagerduty.enabled: yes' and this must be set.
 	// Deprecated: use Pagerduty.Enabled instead
 	PagerdutyAlerts bool `yaml:"pagerduty_alerts"`
