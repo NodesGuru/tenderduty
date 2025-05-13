@@ -736,7 +736,7 @@ func (cc *ChainConfig) watch() {
 				totalRewardsConverted := totalRewards.Amount.MustFloat64() * coinPrice.Price
 				id := cc.valInfo.Valcons + "_unclaimed_rewards"
 				severity := "warning"
-				message := fmt.Sprintf("%s has more than %.0f %s unclaimed rewards", cc.valInfo.Moniker, cc.Alerts.UnclaimedRewardsThreshold, td.PriceConversion.Currency)
+				message := fmt.Sprintf("%s has more than %.0f %s unclaimed rewards on %s", cc.valInfo.Moniker, cc.Alerts.UnclaimedRewardsThreshold, td.PriceConversion.Currency, cc.name)
 				if totalRewardsConverted > cc.Alerts.UnclaimedRewardsThreshold {
 					td.alert(cc.name, message, severity, false, &id)
 					unclaimedRewardsAlarm = true
@@ -752,7 +752,7 @@ func (cc *ChainConfig) watch() {
 
 		// there are open proposals that the validator has not voted on
 		idTemplate := "%s_gov_voting_%d"
-		msgTemplate := "[WARNING] There is an open proposal (#%v) that the validator has not voted on%s"
+		msgTemplate := "[WARNING] There is an open proposal (#%v) that the validator has not voted on %s%s"
 
 		// Create a map for faster lookups of unvoted proposal IDs
 		unvotedProposalMap := make(map[uint64]bool)
@@ -770,7 +770,7 @@ func (cc *ChainConfig) watch() {
 					// currently Tenderduty considers alerts with different messages as different alerts so we have to disable this feature for Namada
 					deadline = ""
 				}
-				alertMsg := fmt.Sprintf(msgTemplate, proposal.ProposalId, deadline)
+				alertMsg := fmt.Sprintf(msgTemplate, proposal.ProposalId, cc.name, deadline)
 
 				// Send alert for this specific proposal
 				td.alert(

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"sync"
 	"time"
 
 	github_com_cosmos_cosmos_sdk_types "github.com/cosmos/cosmos-sdk/types"
@@ -16,6 +15,7 @@ import (
 const (
 	defaultCoinmarketcapApiEndpoint = "https://pro-api.coinmarketcap.com"
 	defaultRequestTimeout           = 10 * time.Second
+	cacheKey                        = "crypto_price"
 )
 
 // CryptoPrice represents price data for a cryptocurrency
@@ -55,27 +55,22 @@ type CoinMarketCapClient struct {
 	slugs           []string
 	apiEndpoint     string
 	httpClient      *http.Client
-	cache           struct {
-		data       map[string]CryptoPrice
-		lastUpdate time.Time
-		mu         sync.RWMutex
-	}
+	cacheClient     *TenderdutyCache
 }
 
 // NewCoinMarketCapClient creates a new client with the provided API key
-func NewCoinMarketCapClient(apiKey string, currency string, cacheExpiration int, slugs []string) *CoinMarketCapClient {
+func NewCoinMarketCapClient(apiKey string, currency string, cacheClient *TenderdutyCache, cacheExpiration int, slugs []string) *CoinMarketCapClient {
 	client := &CoinMarketCapClient{
 		apiKey:          apiKey,
 		currency:        currency,
 		cacheExpiration: cacheExpiration,
+		cacheClient:     cacheClient,
 		slugs:           slugs,
 		apiEndpoint:     defaultCoinmarketcapApiEndpoint,
 		httpClient: &http.Client{
 			Timeout: defaultRequestTimeout,
 		},
 	}
-
-	client.cache.data = make(map[string]CryptoPrice)
 
 	return client
 }
@@ -94,77 +89,38 @@ func WithTimeout(timeout time.Duration) func(*CoinMarketCapClient) {
 	}
 }
 
-// getCachedData retrieves data from the cache if it's valid and not expired
-func (c *CoinMarketCapClient) getCachedData() (map[string]CryptoPrice, bool, time.Time) {
-	c.cache.mu.RLock()
-	defer c.cache.mu.RUnlock()
-
-	cacheAge := time.Since(c.cache.lastUpdate)
-	hasCache := !c.cache.lastUpdate.IsZero()
-	lastUpdate := c.cache.lastUpdate
-
-	// If cache is valid and not expired, return cached data
-	if hasCache && cacheAge < time.Duration(c.cacheExpiration) {
-		result := make(map[string]CryptoPrice, len(c.cache.data))
-		for k, v := range c.cache.data {
-			result[k] = v
-		}
-		return result, true, lastUpdate
-	}
-
-	return nil, hasCache, lastUpdate
-}
-
-// updateCache updates the cache with new data
-func (c *CoinMarketCapClient) updateCache(prices map[string]CryptoPrice) {
-	c.cache.mu.Lock()
-	defer c.cache.mu.Unlock()
-
-	c.cache.data = prices
-	c.cache.lastUpdate = time.Now()
-}
-
 // GetPrices fetches cryptocurrency prices, using cache when available
 func (c *CoinMarketCapClient) GetPrices(ctx context.Context) (map[string]CryptoPrice, error) {
-	// Try to get from cache first
-	cachedData, cacheValid, _ := c.getCachedData()
-	if cacheValid {
-		return cachedData, nil
+	// try to find the data from cache first
+	cache, ok1 := c.cacheClient.Get(cacheKey)
+	prices, ok2 := cache.(map[string]CryptoPrice)
+
+	if !ok1 || !ok2 {
+		// cache nout found, fetch and cache it
+		var err error
+		prices, err = c.fetchPricesFromAPI(ctx, c.slugs, c.currency)
+		if err != nil {
+			return nil, err
+		}
+		// Update cache
+		c.cacheClient.Set(cacheKey, prices, time.Duration(c.cacheExpiration)*time.Hour)
 	}
 
-	// Cache expired or doesn't exist, fetch fresh data
-	prices, err := c.fetchPricesFromAPI(ctx, c.slugs, c.currency)
-	if err != nil {
-		return nil, err
-	}
-
-	// Update cache
-	c.updateCache(prices)
 	return prices, nil
 }
 
 // GetPrice fetches the price for a specific cryptocurrency slug, using cache when available
 func (c *CoinMarketCapClient) GetPrice(ctx context.Context, slug string) (*CryptoPrice, error) {
-	// Try to get from cache first
-	cachedData, cacheValid, _ := c.getCachedData()
-	if cacheValid {
-		if price, exists := cachedData[slug]; exists {
-			return &price, nil
-		}
-	}
-
-	// Cache expired, doesn't exist, or slug not found - fetch fresh data
-	prices, err := c.fetchPricesFromAPI(ctx, c.slugs, c.currency)
+	prices, err := c.GetPrices(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	// Update cache
-	c.updateCache(prices)
-
-	// Check if the slug exists in the freshly fetched data
-	if price, exists := prices[slug]; exists {
-		return &price, nil
+	if prices != nil {
+		// Check if the slug exists in the freshly fetched data
+		if price, exists := prices[slug]; exists {
+			return &price, nil
+		}
 	}
 
 	// Slug not found even after refreshing the data

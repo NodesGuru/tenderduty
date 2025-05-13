@@ -720,8 +720,8 @@ func loadConfig(yamlFile, stateFile, chainConfigDirectory string, password *stri
 			}
 		}
 
-		c.coinMarketCapClient = utils.NewCoinMarketCapClient(c.CoinMarketCapAPIToken, currency, cacheExpiration, slugs)
 		c.tenderdutyCache = utils.NewCache()
+		c.coinMarketCapClient = utils.NewCoinMarketCapClient(c.CoinMarketCapAPIToken, currency, c.tenderdutyCache, cacheExpiration, slugs)
 		_, err := c.coinMarketCapClient.GetPrices(c.ctx)
 		if err == nil {
 			l("💸 price conversion enabled")
