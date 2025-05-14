@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/url"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -208,7 +209,40 @@ func (d *NamadaProvider) QueryValidatorInfo(ctx context.Context) (pub []byte, mo
 		if metadata.Metadata != nil && metadata.Metadata.Name != nil {
 			info.Moniker = *metadata.Metadata.Name
 		}
-		return ToBytes(hexAddress), info.Moniker, info.Jailed, info.Bonded, 0, 0, nil
+
+		response, err = d.ChainConfig.client.ABCIQuery(ctx, fmt.Sprintf("/vp/pos/validator/stake/%s", validatorAddress), nil)
+		if err != nil {
+			return nil, "", false, false, 0, 0, fmt.Errorf("query validator stake: %w", err)
+		}
+		var stake *namada.Dec
+		err = borsh.Deserialize(&stake, response.Response.Value)
+		if err != nil {
+			return nil, "", false, false, 0, 0, fmt.Errorf("unmarshal validator stake: %w", err)
+		}
+		if stake != nil {
+			delegatedTokensFloat, err := strconv.ParseFloat(stake.Raw.String(), 64)
+			if err == nil {
+				// not sure about the rationale behind yet but the value is uint and it needs to be divivded by 1e6 to get the correct precision
+				info.DelegatedTokens = delegatedTokensFloat / 1000000
+			}
+		}
+
+		response, err = d.ChainConfig.client.ABCIQuery(ctx, fmt.Sprintf("/vp/pos/validator/commission/%s", validatorAddress), nil)
+		if err != nil {
+			return nil, "", false, false, 0, 0, fmt.Errorf("query validator commission rate: %w", err)
+		}
+		commission := namada.ValidatorCommissionPair{}
+		err = borsh.Deserialize(&commission, response.Response.Value)
+		if err != nil {
+			return nil, "", false, false, 0, 0, fmt.Errorf("unmarshal validator commission pair: %w", err)
+		}
+		if commission.CommissionRate != nil {
+			commissionRateFloat, err := strconv.ParseFloat((*commission.CommissionRate).String(), 64)
+			if err == nil {
+				info.CommissionRate = commissionRateFloat
+			}
+		}
+		return ToBytes(hexAddress), info.Moniker, info.Jailed, info.Bonded, info.DelegatedTokens, info.CommissionRate, nil
 	}
 
 	return ToBytes(hexAddress), d.ChainConfig.ValAddress, false, true, 0, 0, nil
@@ -256,13 +290,128 @@ func (d *NamadaProvider) QuerySlashingParams(ctx context.Context) (*slashing.Par
 }
 
 func (d *NamadaProvider) QueryDenomMetadata(ctx context.Context, denom string) (medatada *bank.Metadata, err error) {
-	return nil, errors.New("Not Implemented")
+	return nil, errors.New("QueryDenomMetadata with ABCIQuery not implemented for Namada")
 }
 
 func (d *NamadaProvider) QueryValidatorSelfDelegationRewardsAndCommission(ctx context.Context) (rewards *github_com_cosmos_cosmos_sdk_types.DecCoins, commission *github_com_cosmos_cosmos_sdk_types.DecCoins, err error) {
-	return nil, nil, errors.New("Not Implemented")
+	// Store the last error to return if all indexer endpoints fail
+	var lastErr error
+	// In Namada we don't query self-delegation rewards, this field will be kept as 0
+	resultRewards := github_com_cosmos_cosmos_sdk_types.DecCoins{
+		github_com_cosmos_cosmos_sdk_types.NewDecCoin("unam", github_com_cosmos_cosmos_sdk_types.ZeroInt()),
+	}
+	resultCommission := github_com_cosmos_cosmos_sdk_types.DecCoins{
+		github_com_cosmos_cosmos_sdk_types.NewDecCoin("unam", github_com_cosmos_cosmos_sdk_types.ZeroInt()),
+	}
+
+	indexers, ok1 := d.ChainConfig.Provider.Configs["indexers"].([]any)
+	validatorAddress, ok2 := d.ChainConfig.Provider.Configs["validator_address"].(string)
+	if ok1 && ok2 {
+		// Create a reusable HTTP client with timeout
+		tr := &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: td.TLSSkipVerify},
+		}
+		httpClient := &http.Client{
+			Transport: tr,
+			Timeout:   5 * time.Second, // Add reasonable timeout
+		}
+		// Try each indexer in the list
+		for _, indexer := range indexers {
+			reqURL := fmt.Sprintf("%s/api/v1/pos/reward/%s", indexer, validatorAddress)
+
+			// Make the HTTP request
+			req, err := http.NewRequest("GET", reqURL, nil)
+			if err != nil {
+				lastErr = err
+				continue // Try next node
+			}
+
+			resp, err := httpClient.Do(req)
+			if err != nil {
+				lastErr = err
+				continue // Try next node
+			}
+
+			func() {
+				defer resp.Body.Close()
+
+				var respJson []namada.NamadaValidatorRewardsResponse
+				if err = json.NewDecoder(resp.Body).Decode(&respJson); err != nil {
+					lastErr = err
+					return
+				}
+
+				if len(respJson) > 0 {
+					value, ok := github_com_cosmos_cosmos_sdk_types.NewIntFromString(respJson[0].MinDenomAmount)
+					if ok {
+						resultCommission[0].Amount = value.ToDec()
+					}
+				}
+			}()
+
+			if resultCommission[0].Amount.IsPositive() {
+				// means the query was successful
+				return &resultRewards, &resultCommission, nil
+			}
+		}
+	}
+	return &resultRewards, &resultCommission, lastErr
 }
 
 func (d *NamadaProvider) QueryValidatorVotingPool(ctx context.Context) (votingPool *staking.Pool, err error) {
-	return nil, errors.New("Not Implemented")
+	// Store the last error to return if all indexer endpoints fail
+	var lastErr error
+	var result *staking.Pool
+	indexers, ok := d.ChainConfig.Provider.Configs["indexers"].([]any)
+
+	if ok {
+		// Create a reusable HTTP client with timeout
+		tr := &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: td.TLSSkipVerify},
+		}
+		httpClient := &http.Client{
+			Transport: tr,
+			Timeout:   5 * time.Second, // Add reasonable timeout
+		}
+		// Try each indexer in the list
+		for _, indexer := range indexers {
+			reqURL := fmt.Sprintf("%s/api/v1/pos/voting-power", indexer)
+
+			// Make the HTTP request
+			req, err := http.NewRequest("GET", reqURL, nil)
+			if err != nil {
+				lastErr = err
+				continue // Try next node
+			}
+
+			resp, err := httpClient.Do(req)
+			if err != nil {
+				lastErr = err
+				continue // Try next node
+			}
+
+			func() {
+				defer resp.Body.Close()
+
+				var respJson namada.NamadaVotingPowerResponse
+				if err = json.NewDecoder(resp.Body).Decode(&respJson); err != nil {
+					lastErr = err
+					return
+				}
+
+				bondedTokens, ok := github_com_cosmos_cosmos_sdk_types.NewIntFromString(respJson.TotalVotingPower)
+				if ok {
+					result = &staking.Pool{
+						NotBondedTokens: github_com_cosmos_cosmos_sdk_types.ZeroInt(), // we ommit this field in Namada
+						BondedTokens:    bondedTokens,
+					}
+				}
+			}()
+
+			if result != nil {
+				return result, nil
+			}
+		}
+	}
+	return nil, lastErr
 }

@@ -700,6 +700,7 @@ func loadConfig(yamlFile, stateFile, chainConfigDirectory string, password *stri
 		}
 	}
 
+	c.tenderdutyCache = utils.NewCache()
 	// init a CoinMarketCap client if needed
 	if c.PriceConversion.Enabled {
 		// Use ternary-like operation for currency selection
@@ -720,7 +721,6 @@ func loadConfig(yamlFile, stateFile, chainConfigDirectory string, password *stri
 			}
 		}
 
-		c.tenderdutyCache = utils.NewCache()
 		c.coinMarketCapClient = utils.NewCoinMarketCapClient(c.CoinMarketCapAPIToken, currency, c.tenderdutyCache, cacheExpiration, slugs)
 		_, err := c.coinMarketCapClient.GetPrices(c.ctx)
 		if err == nil {

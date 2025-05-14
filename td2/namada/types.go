@@ -223,6 +223,12 @@ type ValidatorMetaData struct {
 	}
 }
 
+type ValidatorCommissionPair struct {
+	CommissionRate              *Dec  // Validator commission rate, optional
+	MaxCommissionChangePerEpoch *Dec  // Validator max commission rate change per epoch, optional
+	Epoch                       Epoch // Query epoch
+}
+
 // NamadaProposalResponse represents the structure of the API response
 type NamadaProposalResponse struct {
 	Results    []NamadaProposal `json:"results"`
@@ -232,6 +238,31 @@ type NamadaProposalResponse struct {
 		TotalPages int `json:"totalPages"`
 		TotalItems int `json:"totalItems"`
 	} `json:"pagination"`
+}
+
+type NamadaVotingPowerResponse struct {
+	TotalVotingPower string `json:"totalVotingPower"`
+}
+
+type Validator struct {
+	ValidatorID   string `json:"validatorId"`
+	Rank          int    `json:"rank"`
+	Address       string `json:"address"`
+	VotingPower   string `json:"votingPower"`
+	MaxCommission string `json:"maxCommission"`
+	Commission    string `json:"commission"`
+	Name          string `json:"name"`
+	Email         string `json:"email"`
+	Website       string `json:"website"`
+	Description   string `json:"description"`
+	DiscordHandle string `json:"discordHandle"`
+	Avatar        string `json:"avatar"`
+	State         string `json:"state"`
+}
+
+type NamadaValidatorRewardsResponse struct {
+	Validator      Validator `json:"validator"`
+	MinDenomAmount string    `json:"minDenomAmount"`
 }
 
 // NamadaProposal represents a proposal in the Namada ecosystem

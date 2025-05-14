@@ -14,5 +14,21 @@
     "display": "BABY",
     "name": "Babylon",
     "symbol": "BABY"
+  },
+  "namada": {
+    "description": "The governance and utility token for the Namada network",
+    "denom_units": [
+      {
+        "denom": "unam"
+      },
+      {
+        "denom": "NAM",
+        "exponent": 6
+      }
+    ],
+    "base": "unam",
+    "display": "NAM",
+    "name": "Namada",
+    "symbol": "NAM"
   }
 }
