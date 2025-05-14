@@ -129,71 +129,83 @@ func (c *CoinMarketCapClient) GetPrice(ctx context.Context, slug string) (*Crypt
 
 // fetchPricesFromAPI makes the actual API call to CoinMarketCap
 func (c *CoinMarketCapClient) fetchPricesFromAPI(ctx context.Context, slugs []string, currency string) (map[string]CryptoPrice, error) {
+	result := make(map[string]CryptoPrice)
 	url := c.apiEndpoint + "/v2/cryptocurrency/quotes/latest"
 
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	// Add required headers
-	req.Header.Add("X-CMC_PRO_API_KEY", c.apiKey)
-	req.Header.Add("Accept", "application/json")
-
-	// Add query parameters
-	q := req.URL.Query()
-	if len(slugs) > 0 {
-		q.Add("slug", joinStrings(slugs, ","))
-	}
-	q.Add("convert", currency)
-	req.URL.RawQuery = q.Encode()
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		bodyBytes, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("API error (status %d): %s", resp.StatusCode, string(bodyBytes))
-	}
-
-	// Parse the response
-	var cmcResp CMCResponse
-	if err := json.NewDecoder(resp.Body).Decode(&cmcResp); err != nil {
-		return nil, fmt.Errorf("failed to parse API response: %w", err)
-	}
-
-	// Check for API error
-	if cmcResp.Status.ErrorCode != 0 {
-		return nil, fmt.Errorf("API returned error: %s", cmcResp.Status.ErrorMessage)
-	}
-
-	// Extract the prices
-	result := make(map[string]CryptoPrice, len(cmcResp.Data))
-	for _, cryptoData := range cmcResp.Data {
-		quoteData, ok := cryptoData.Quote[currency]
-		if !ok {
-			continue // Skip if the requested currency quote isn't available
-		}
-
-		lastUpdated, err := time.Parse("2006-01-02T15:04:05.000Z", quoteData.LastUpdated)
+	// Process each slug individually as some of the slugs may not be valid
+	for _, slug := range slugs {
+		req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 		if err != nil {
-			// If time parsing fails, use current time as fallback
-			lastUpdated = time.Now()
+			continue // Skip this slug and try the next one
 		}
 
-		result[cryptoData.Slug] = CryptoPrice{
-			Name:        cryptoData.Name,
-			Symbol:      cryptoData.Symbol,
-			Slug:        cryptoData.Slug,
-			Currency:    currency,
-			Price:       quoteData.Price,
-			LastUpdated: lastUpdated,
+		// Add required headers
+		req.Header.Add("X-CMC_PRO_API_KEY", c.apiKey)
+		req.Header.Add("Accept", "application/json")
+
+		// Add query parameters for this individual slug
+		q := req.URL.Query()
+		q.Add("slug", slug)
+		q.Add("convert", currency)
+		req.URL.RawQuery = q.Encode()
+
+		resp, err := c.httpClient.Do(req)
+		if err != nil {
+			// Log the error and continue with next slug
+			fmt.Printf("Error fetching data for slug %s: %v\n", slug, err)
+			continue
+		}
+
+		// Always close the response body
+		defer func(slug string, body io.ReadCloser) {
+			body.Close()
+		}(slug, resp.Body)
+
+		// If status is not OK, skip this slug
+		if resp.StatusCode != http.StatusOK {
+			bodyBytes, _ := io.ReadAll(resp.Body)
+			fmt.Printf("API error for slug %s (status %d): %s\n", slug, resp.StatusCode, string(bodyBytes))
+			continue
+		}
+
+		// Parse the response
+		var cmcResp CMCResponse
+		if err := json.NewDecoder(resp.Body).Decode(&cmcResp); err != nil {
+			fmt.Printf("Failed to parse API response for slug %s: %v\n", slug, err)
+			continue
+		}
+
+		// Check for API error
+		if cmcResp.Status.ErrorCode != 0 {
+			fmt.Printf("API returned error for slug %s: %s\n", slug, cmcResp.Status.ErrorMessage)
+			continue
+		}
+
+		// Extract the price data for this slug
+		for _, cryptoData := range cmcResp.Data {
+			quoteData, ok := cryptoData.Quote[currency]
+			if !ok {
+				continue // Skip if the requested currency quote isn't available
+			}
+
+			lastUpdated, err := time.Parse("2006-01-02T15:04:05.000Z", quoteData.LastUpdated)
+			if err != nil {
+				// If time parsing fails, use current time as fallback
+				lastUpdated = time.Now()
+			}
+
+			result[cryptoData.Slug] = CryptoPrice{
+				Name:        cryptoData.Name,
+				Symbol:      cryptoData.Symbol,
+				Slug:        cryptoData.Slug,
+				Currency:    currency,
+				Price:       quoteData.Price,
+				LastUpdated: lastUpdated,
+			}
 		}
 	}
 
+	// Return whatever valid data we were able to gather
 	return result, nil
 }
 
