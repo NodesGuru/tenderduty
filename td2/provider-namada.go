@@ -417,5 +417,7 @@ func (d *NamadaProvider) QueryValidatorVotingPool(ctx context.Context) (votingPo
 }
 
 func (d *NamadaProvider) QueryChainInfo(ctx context.Context) (totalSupply float64, communityTax float64, inflationRate float64, err error) {
+	// TODO: leave it here for now, Namada has a quite different way of calculating the inflation rate
+	// see more details here https://specs.namada.net/modules/proof-of-stake/inflation-system#proof-of-stake-rewards
 	return 0, 0, 0, errors.New("CalculateAPR not implemented for Namada")
 }
