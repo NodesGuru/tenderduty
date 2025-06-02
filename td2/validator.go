@@ -29,6 +29,7 @@ type ValInfo struct {
 	DelegatedTokens       float64                                      `json:"delegated_tokens"`
 	VotingPowerPercent    float64                                      `json:"voting_power_percent"`
 	CommissionRate        float64                                      `json:"commission_rate"`
+	ValidatorAPR          float64                                      `json:"validator_apr"`
 	SelfDelegationRewards *github_com_cosmos_cosmos_sdk_types.DecCoins `json:"self_delegation_rewards"`
 	Commission            *github_com_cosmos_cosmos_sdk_types.DecCoins `json:"commission"`
 }
@@ -234,6 +235,24 @@ func (cc *ChainConfig) GetValInfo(first bool) (err error) {
 		// TODO:update statsChan
 	} else {
 		l(fmt.Errorf("failed to query rewards and commission information for chain %s, err: %w", cc.name, err))
+	}
+
+	if cc.denomMetadata != nil {
+		// Query the chain's base APR
+		totalSupply, communityTax, inflationRate, err := provider.QueryChainInfo(ctx)
+		if err == nil {
+			cc.totalSupply = totalSupply
+			cc.communityTax = communityTax
+			if cc.InflationRateOverriding != 0 {
+				// Override the base APR with the configured value
+				inflationRate = cc.InflationRateOverriding
+			}
+			cc.inflationRate = inflationRate
+			cc.baseAPR = inflationRate * (1 - communityTax) * totalSupply / cc.totalBondedTokens
+			cc.valInfo.ValidatorAPR = cc.baseAPR * (1 - cc.valInfo.CommissionRate)
+		} else {
+			l(fmt.Errorf("failed to query APR-related data such as total supply, community tax and inflation rate for chain %s, err: %w", cc.name, err))
+		}
 	}
 
 	// Query for unvoted proposals regardless of alert setting
