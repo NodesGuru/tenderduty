@@ -23,9 +23,14 @@ type ChainStatus struct {
 	LastError               string                                       `json:"last_error"`
 	UnvotedOpenGovProposals int                                          `json:"unvoted_open_gov_proposals"`
 	TotalBondedTokens       float64                                      `json:"total_bonded_tokens"`
+	TotalSupply             float64                                      `json:"total_supply"`
+	CommunityTax            float64                                      `json:"community_tax"`
+	InflationRate           float64                                      `json:"inflation_rate"`
+	BaseAPR                 float64                                      `json:"base_apr"`
 	VotingPowerPercent      float64                                      `json:"voting_power_percent"`
 	DelegatedTokens         float64                                      `json:"delegated_tokens"`
 	CommissionRate          float64                                      `json:"commission_rate"`
+	ValidatorAPR            float64                                      `json:"validator_apr"`
 	SelfDelegationRewards   *github_com_cosmos_cosmos_sdk_types.DecCoins `json:"self_delegation_rewards"`
 	Commission              *github_com_cosmos_cosmos_sdk_types.DecCoins `json:"commission"`
 	CryptoPrice             *utils.CryptoPrice                           `json:"crypto_price"`

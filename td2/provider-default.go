@@ -18,6 +18,7 @@ import (
 	bank "github.com/cosmos/cosmos-sdk/x/bank/types"
 	distribution "github.com/cosmos/cosmos-sdk/x/distribution/types"
 	gov "github.com/cosmos/cosmos-sdk/x/gov/types"
+	mint "github.com/cosmos/cosmos-sdk/x/mint/types"
 	slashing "github.com/cosmos/cosmos-sdk/x/slashing/types"
 	staking "github.com/cosmos/cosmos-sdk/x/staking/types"
 )
@@ -358,4 +359,81 @@ func (d *DefaultProvider) QuerySlashingParams(ctx context.Context) (*slashing.Pa
 		return nil, fmt.Errorf("unmarshal slashing params: %w", err)
 	}
 	return &params.Params, nil
+}
+
+func (d *DefaultProvider) QueryChainInfo(ctx context.Context) (totalSupply float64, communityTax float64, inflationRate float64, err error) {
+	// Query total supply using bank module
+	supplyQueryParams := bank.QuerySupplyOfRequest{
+		Denom: d.ChainConfig.denomMetadata.Base,
+	}
+	b, err := supplyQueryParams.Marshal()
+	if err != nil {
+		return 0, 0, 0, fmt.Errorf("marshal total supply request: %w", err)
+	}
+
+	resp, err := d.ChainConfig.client.ABCIQuery(ctx, "/cosmos.bank.v1beta1.Query/SupplyOf", b)
+	if err != nil {
+		return 0, 0, 0, fmt.Errorf("query total supply: %w", err)
+	}
+
+	if resp.Response.Value == nil {
+		return 0, 0, 0, errors.New("could not query total supply")
+	}
+
+	supplyResponse := &bank.QuerySupplyOfResponse{}
+	err = supplyResponse.Unmarshal(resp.Response.Value)
+	if err != nil {
+		return 0, 0, 0, fmt.Errorf("unmarshal total supply response: %w", err)
+	}
+
+	totalSupply = supplyResponse.Amount.Amount.ToDec().MustFloat64()
+
+	// Query community tax using distribution module
+	distQueryParams := distribution.QueryParamsRequest{}
+	b, err = distQueryParams.Marshal()
+	if err != nil {
+		return 0, 0, 0, fmt.Errorf("marshal distribution params request: %w", err)
+	}
+
+	resp, err = d.ChainConfig.client.ABCIQuery(ctx, "/cosmos.distribution.v1beta1.Query/Params", b)
+	if err != nil {
+		return 0, 0, 0, fmt.Errorf("query distribution params: %w", err)
+	}
+
+	if resp.Response.Value == nil {
+		return 0, 0, 0, errors.New("could not query distribution params")
+	}
+
+	distResponse := &distribution.QueryParamsResponse{}
+	err = distResponse.Unmarshal(resp.Response.Value)
+	if err != nil {
+		return 0, 0, 0, fmt.Errorf("unmarshal distribution params response: %w", err)
+	}
+
+	communityTax = distResponse.Params.CommunityTax.MustFloat64()
+
+	// Query current inflation rate using mint module
+	inflationQuery := mint.QueryInflationRequest{}
+	b, err = inflationQuery.Marshal()
+	if err != nil {
+		return 0, 0, 0, fmt.Errorf("marshal inflation request: %w", err)
+	}
+
+	resp, err = d.ChainConfig.client.ABCIQuery(ctx, "/cosmos.mint.v1beta1.Query/Inflation", b)
+	if err != nil {
+		return 0, 0, 0, fmt.Errorf("query inflation: %w", err)
+	}
+
+	inflationRate = 0.0
+	if resp.Response.Value != nil {
+		inflationResponse := &mint.QueryInflationResponse{}
+		err = inflationResponse.Unmarshal(resp.Response.Value)
+		if err != nil {
+			return 0, 0, 0, fmt.Errorf("unmarshal inflation response: %w", err)
+		}
+
+		inflationRate = inflationResponse.Inflation.MustFloat64()
+	}
+
+	return totalSupply, communityTax, inflationRate, nil
 }

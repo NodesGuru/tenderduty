@@ -173,19 +173,19 @@ export class TableRenderer {
       //  row.classList.add('row-has-alert');
       // }
 
-      // Column 1: Status Indicator (potentially includes modal HTML)
+      // Column: Status Indicator (potentially includes modal HTML)
       const statusHtml = this._createStatusIndicator(chainStatus);
       const statusCell = row.insertCell(columnIndex);
       statusCell.innerHTML = `<div style="text-align: center">${statusHtml}</div>`;
       statusCell.classList.add("status-cell");
       columnIndex++;
 
-      // Column 2: Chain ID
+      // Column: Chain ID
       row.insertCell(columnIndex).innerHTML =
         `<div>${_.escape(chainStatus.name)} (${_.escape(chainStatus.chain_id)})</div>`;
       columnIndex++;
 
-      // Column 3: Height with animation
+      // Column: Height with animation
       const heightClass = this._getHeightAnimationClass(
         chainStatus.chain_id,
         chainStatus.height,
@@ -195,7 +195,7 @@ export class TableRenderer {
       heightCell.classList.add("height-data");
       columnIndex++;
 
-      // Column 4: Moniker
+      // Column: Moniker
       if (chainStatus.moniker === "not connected") {
         row.insertCell(columnIndex).innerHTML =
           `<div class="uk-text-warning">${_.escape(chainStatus.moniker)}</div>`;
@@ -205,29 +205,34 @@ export class TableRenderer {
       }
       columnIndex++;
 
-      // Column 4: Voting Power
+      // Column: Voting Power
       row.insertCell(columnIndex).innerHTML =
         `<div class="uk-text-center"><span class="uk-width-1-2">${(100 * chainStatus.voting_power_percent).toFixed(1)}%</span></div>`;
       columnIndex++;
 
-      // Column 6: Unvoted Proposals
+      // Column: Validator APR
+      row.insertCell(columnIndex).innerHTML =
+        `<div class="uk-text-center"><span class="uk-width-1-2">${(100 * chainStatus.validator_apr).toFixed(1)}%</span></div>`;
+      columnIndex++;
+
+      // Column: Unvoted Proposals
       row.insertCell(columnIndex).innerHTML =
         `<div style="text-align: center">${chainStatus.unvoted_open_gov_proposals}</div>`;
       columnIndex++;
 
-      // Column 7: Uptime window
+      // Column: Uptime window
       const uptimeCell = row.insertCell(columnIndex);
       uptimeCell.innerHTML = `<div uk-grid>${this._createUptimeWindow(chainStatus)}</div>`;
       uptimeCell.classList.add("numeric-data");
       columnIndex++;
 
-      // Column 8: Threshold
+      // Column: Threshold
       const thresholdCell = row.insertCell(columnIndex);
       thresholdCell.innerHTML = `<div class="uk-text-center"><span class="uk-width-1-2">${100 * chainStatus.min_signed_per_window}%</span></div>`;
       thresholdCell.classList.add("numeric-data");
       columnIndex++;
 
-      // Column 9: RPC Nodes
+      // Column: RPC Nodes
       const rpcCell = row.insertCell(columnIndex);
       rpcCell.innerHTML = `<div class="uk-text-center">${this._createNodeStatus(chainStatus)}</div>`;
       rpcCell.classList.add("numeric-data");

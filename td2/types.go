@@ -130,6 +130,10 @@ type ChainConfig struct {
 	valInfo           *ValInfo           // recent validator state, only refreshed every few minutes
 	lastValInfo       *ValInfo           // use for detecting newly-jailed/tombstone
 	totalBondedTokens float64            // total bonded tokens on the chain
+	totalSupply       float64            // total supply of the chain, used for calculating APR
+	communityTax      float64            // community tax rate, used for calculating APR
+	inflationRate     float64            // inflation rate of the chain, used for calculating APR
+	baseAPR           float64            // the base APR of a chain
 	denomMetadata     *bank.Metadata     // chain denom metadata
 	cryptoPrice       *utils.CryptoPrice // coin price in a fiat currency
 
@@ -175,6 +179,8 @@ type ChainConfig struct {
 	Provider ProviderConfig `yaml:"provider"`
 	// The name/slug of this chain, used by CoinMarketCap API to convert the price
 	Slug string `yaml:"slug"`
+	// The inflation rate of the chain, if specified the value overrides the query result
+	InflationRateOverriding float64 `yaml:"inflationRate"`
 }
 
 // mkUpdate returns the info needed by prometheus for a gauge.
@@ -462,9 +468,14 @@ func validateConfig(c *Config) (fatal bool, problems []string) {
 				Blocks:                  v.blocksResults,
 				UnvotedOpenGovProposals: len(v.unvotedOpenGovProposals),
 				TotalBondedTokens:       v.totalBondedTokens,
+				TotalSupply:             v.totalSupply,
+				CommunityTax:            v.communityTax,
+				InflationRate:           v.inflationRate,
+				BaseAPR:                 v.baseAPR,
 				VotingPowerPercent:      v.valInfo.VotingPowerPercent,
 				DelegatedTokens:         v.valInfo.DelegatedTokens,
 				CommissionRate:          v.valInfo.CommissionRate,
+				ValidatorAPR:            v.valInfo.ValidatorAPR,
 				SelfDelegationRewards:   v.valInfo.SelfDelegationRewards,
 				Commission:              v.valInfo.Commission,
 				CryptoPrice:             v.cryptoPrice,
@@ -750,6 +761,7 @@ func clearStale(alarms map[string]time.Time, what string, hasPagerduty bool, hou
 
 type ChainProvider interface {
 	QueryUnvotedOpenProposals(ctx context.Context) ([]gov.Proposal, error)
+	QueryChainInfo(ctx context.Context) (totalSupply float64, communityTax float64, inflationRate float64, err error)
 	QueryValidatorInfo(ctx context.Context) (pub []byte, moniker string, jailed bool, bonded bool, delegatedTokens float64, commissionRate float64, err error)
 	QuerySigningInfo(ctx context.Context) (*slashing.ValidatorSigningInfo, error)
 	QuerySlashingParams(ctx context.Context) (*slashing.Params, error)
