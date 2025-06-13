@@ -6,6 +6,9 @@ This is a fork of the original [Tenderduty](https://github.com/blockpane/tenderd
    - Receive alerts when there are proposals in voting period and the validator has not voted on. Reminders are sent periodically and the alert is resolved once the validator has voted.
    - Unvoted proposals are tracked and reported in the dashboard.
    - A Prometheus metric is also added to monitor the number of unvoted proposals.
+- **[More metrics.](#more-metrics)**
+   - Voting power is now reported in the dashboard, and alerts are fired upon changes above a configurable threshold.
+   - Staking APR is now reported in the dashboard.
 - **[Configurable severity threshold per channel.](#channel-severity-thresholds)** Configure different minimum notification levels for each channel (e.g. "critical" for Pagerduty, "info" and above for Telegram).
 - **[Improved support for Namada.](#support-for-namada)** Proper reporting of otherwise missing information such as the Moniker, uptime data or slashing threshold.
 - **[Pre-built binaries.](#pre-built-binaries)** Releases now include pre-built binaries for Linux and MacOS.
@@ -99,6 +102,23 @@ When there are proposals in voting period and the validator has not voted on, an
 
 ![gov-monitoring](./docs/img/tl-gov-monitoring.png)
 
+### More metrics
+
+Voting power and staking APR are now fetched from each RPC and reported in the dashboard when available:
+
+![more-metrics](./docs/img/more-metrics-table.png)
+
+Additionally, alerts can be configured for stake changes above a configurable threshold, with the following configuration parameters:
+
+```yaml
+# Alert when a validator's stake change goes beyond the threshold
+      stake_change_alerts: yes
+      stake_change_drop_threshold: 0.1 # meaning 10%
+      stake_change_increase_threshold: 0.1 # meaning 10%
+```
+
+![stake-change-alert](./docs/img/di-stake-alert.png)
+
 ### Channel Severity Thresholds
 
 Thanks to the option `severity_threshold` in the config yaml, users are able to configure what kinds of alerts are sent to which channels. For example, if users want to receive only critical alerts on Pagerduty, but all alerts on Telegram, the following configuration can be used:
@@ -131,6 +151,7 @@ Here is a list of all the alerts on Tenderduty.
 | PercentageEmptyBlocks    | validator has > X% empty blocks (Y of Z proposed blocks) on chainid ... | configured via `empty_percentage_priority`  |
 | RPCNodeDown              | RPC node X has been down for > Y minutes on chainZ                      | configured via `node_down_alert_severity`   |
 | UnvotedGoveranceProposal | There is an open proposal (#X) that the validator has not voted on      | warning                                     |
+| StakeChange              | Validator's stake has changed by more than X% on chainY                 | warning                                     |
 
 ### Support for Namada
 
