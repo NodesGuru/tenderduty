@@ -2,19 +2,19 @@
  * DataService
  * Handles all API requests to the server
  */
-import { API } from './constants.js';
+import { API } from "./constants.js";
 
 export class DataService {
   constructor() {
     this.baseUrl = window.location.origin;
-    
+
     this.fetchOptions = {
-      method: 'GET',
-      mode: 'cors',
-      cache: 'no-cache',
-      credentials: 'same-origin',
-      redirect: 'error',
-      referrerPolicy: 'no-referrer'
+      method: "GET",
+      mode: "cors",
+      cache: "no-cache",
+      credentials: "same-origin",
+      redirect: "error",
+      referrerPolicy: "no-referrer",
     };
   }
 
@@ -80,17 +80,18 @@ export class DataService {
 
       // Load state data
       const state = await this.fetchState();
-      
+
       // Load logs if container is visible
       if (!document.getElementById("logContainer").hidden) {
         const logs = await this.fetchLogs();
         return { ...state, logs };
       }
-      
+
       return state;
     } catch (error) {
-      console.error('Error loading initial state:', error);
+      console.error("Error loading initial state:", error);
       return null;
     }
   }
-} 
+}
+

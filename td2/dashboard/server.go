@@ -23,7 +23,7 @@ var (
 
 const logLength = 256
 
-func Serve(port string, updates chan *ChainStatus, logs chan LogMessage, hideLogs bool) {
+func Serve(port string, updates chan *ChainStatus, logs chan LogMessage, hideLogs bool, devMode bool) {
 	var err error
 	rootDir, err = fs.Sub(Content, "static")
 	if err != nil {
@@ -102,7 +102,7 @@ func Serve(port string, updates chan *ChainStatus, logs chan LogMessage, hideLog
 		}
 	}()
 
-	var upgrader = websocket.Upgrader{}
+	upgrader := websocket.Upgrader{}
 	upgrader.CheckOrigin = func(r *http.Request) bool { return true }
 	upgrader.EnableCompression = true
 
@@ -141,7 +141,9 @@ func Serve(port string, updates chan *ChainStatus, logs chan LogMessage, hideLog
 		_, _ = writer.Write(statusCache)
 	})
 
-	http.Handle("/", &CacheHandler{})
+	http.Handle("/", &CacheHandler{
+		devMode: devMode,
+	})
 	server := &http.Server{
 		Addr:              ":" + port,
 		ReadHeaderTimeout: 3 * time.Second,
@@ -152,10 +154,16 @@ func Serve(port string, updates chan *ChainStatus, logs chan LogMessage, hideLog
 }
 
 // CacheHandler implements the Handler interface with a Cache-Control set on responses
-type CacheHandler struct{}
+type CacheHandler struct {
+	devMode bool
+}
 
 func (ch CacheHandler) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 	writer.Header().Set("Cache-Control", "public, max-age=3600")
 	writer.Header().Set("X-Powered-By", "https://github.com/firstset/tenderduty")
-	http.FileServer(http.FS(rootDir)).ServeHTTP(writer, request)
+	if ch.devMode {
+		http.FileServer(http.Dir("./td2/static")).ServeHTTP(writer, request)
+	} else {
+		http.FileServer(http.FS(rootDir)).ServeHTTP(writer, request)
+	}
 }

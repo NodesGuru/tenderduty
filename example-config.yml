@@ -20,6 +20,14 @@ prometheus_enabled: yes
 # What port should it listen on? For now only port is configurable.
 prometheus_listen_port: 28686
 
+# CoinMarketCap API key for price conversions
+coin_market_cap_api_token: xxxxxx
+# When enabled, the cryptos will be converted into a fiat currency based on its latest price
+convert_to_fiat:
+  enabled: true
+  currency: USD # or EUR, SEK, etc.
+  cache_expiration: 8 # cache the pricing data for 8 hours
+
 # Global setting for pagerduty
 pagerduty:
   # Should we use PD? Be aware that if this is set to no it overrides individual chain alerting settings.
@@ -28,6 +36,9 @@ pagerduty:
   api_key: aaaaaaaaaaaabbbbbbbbbbbbbcccccccccccc
   # Not currently used, but will be soon. This allows setting escalation priorities etc.
   default_severity: alert
+  # Severity threshold defines the minimum severity level at which the alerts are sent to this channel
+  # In Tenderduty there are three severity levels: info, warning, and critical. `severity_threshold: critical` means that Tenderduty only sends critical alerts to this channel (Pagerduty)
+  severity_threshold: critical
 
 # Discord settings
 discord:
@@ -35,6 +46,8 @@ discord:
   enabled: no
   # The webhook is set by right-clicking on a channel, editing the settings, and configuring a webhook in the intergrations section.
   webhook: https://discord.com/api/webhooks/999999999999999999/zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz
+  # Severity threshold defines the minimum severity level at which the alerts are sent to this channel
+  severity_threshold: info
 
 # Telegram settings
 telegram:
@@ -44,6 +57,8 @@ telegram:
   api_key: "5555555555:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
   # The group ID for the chat where messages will be sent. Google how to find this, will include better info later.
   channel: "-666666666"
+  # Severity threshold defines the minimum severity level at which the alerts are sent to this channel
+  severity_threshold: info
 
 # Slack settings
 slack:
@@ -51,6 +66,8 @@ slack:
   enabled: no
   # The webhook can be added in the Slack app directory.
   webhook: https://hooks.slack.com/services/AAAAAAAAAAAAAAAAAAAAAAA/bbbbbbbbbbbbbbbbbbbbbbbb
+  # Severity threshold defines the minimum severity level at which the alerts are sent to this channel
+  severity_threshold: info
 
 # Healthcheck settings (dead man's switch)
 healthcheck:
@@ -60,6 +77,10 @@ healthcheck:
   ping_url: https://hc-ping.com/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee
   # Rate in which pings are sent in seconds.
   ping_rate: 60
+
+# If governance_alerts for a chain is enabled, the following defines how frequently a reminder should be sent, in hours
+# Optional, the value is 6 (hours) when it is not set, but note that this cannot be configured per chain for now
+governance_alerts_reminder_interval: 6
 
 # The various chains to be monitored. Create a new entry for each chain. The name itself can be arbitrary, but a
 # user-friendly name is recommended.
@@ -75,6 +96,12 @@ chains:
     # Should the monitor revert to using public API endpoints if all supplied RCP nodes fail?
     # This isn't always reliable, not all public nodes have websocket proxying setup correctly.
     public_fallback: no
+    # the name/slug of this chain, used by CoinMarketCap API to convert the price
+    slug: osmosis
+
+    # Without specifying this option, the inflationRate is queried from a RPC call, but it may not be available for some chains
+    # If the inflration rate cannot be queried, you can use this option to explicitly set the value
+    inflationRate: 0.04
 
     # Controls various alert settings for each chain.
     alerts:
@@ -121,6 +148,16 @@ chains:
 
       # Should alerts be sent there are open governance proposals?
       governance_alerts: yes
+
+      # Alert when a validator's stake change goes beyond the threshold
+      stake_change_alerts: yes
+      stake_change_drop_threshold: 0.1 # meaning 10%
+      stake_change_increase_threshold: 0.1 # meaning 10%
+
+      # Alert when a validator has more than the threhold value of unclaimed rewards
+      # The threshold is defined with a fiat currency unit like USD, so this feature requires properly configuring coin_market_cap_api_token and enabling convert_to_fiat
+      unclaimed_rewards_alerts: yes
+      unclaimed_rewards_threshold_in_fiat_currency: 10000
 
       # for this *specific* chain it's possible to override alert settings. If the api_key or webhook addresses are empty,
       # the global settings will be used. Note, enabled must be set both globally and for each chain.

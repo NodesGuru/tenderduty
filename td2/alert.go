@@ -6,14 +6,17 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math"
 	"net/http"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/PagerDuty/go-pagerduty"
+	github_com_cosmos_cosmos_sdk_types "github.com/cosmos/cosmos-sdk/types"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
@@ -39,6 +42,8 @@ type alertMsg struct {
 
 	slkHook     string
 	slkMentions string
+
+	alertConfig *AlertConfig
 }
 
 type notifyDest uint8
@@ -69,7 +74,7 @@ func (a *alarmCache) clearNoBlocks(cc *ChainConfig) {
 			td.alert(
 				cc.name,
 				fmt.Sprintf("stalled: have not seen a new block on %s in %d minutes", cc.ChainId, cc.Alerts.Stalled),
-				"info",
+				"critical",
 				true,
 				&cc.valInfo.Valcons,
 			)
@@ -111,27 +116,45 @@ func shouldNotify(msg *alertMsg, dest notifyDest) bool {
 	defer alarms.notifyMux.Unlock()
 	var whichMap map[string]time.Time
 	var service string
-	if alarms.AllAlarms[msg.chain] == nil {
-		alarms.AllAlarms[msg.chain] = make(map[string]time.Time)
-	}
 	switch dest {
 	case pd:
+		if !slices.Contains(SeverityThresholdToSeverities(msg.alertConfig.Pagerduty.SeverityThreshold), msg.severity) {
+			return false
+		}
 		whichMap = alarms.SentPdAlarms
 		service = "PagerDuty"
 	case tg:
+		if !slices.Contains(SeverityThresholdToSeverities(msg.alertConfig.Telegram.SeverityThreshold), msg.severity) {
+			return false
+		}
 		whichMap = alarms.SentTgAlarms
 		service = "Telegram"
 	case di:
+		if !slices.Contains(SeverityThresholdToSeverities(msg.alertConfig.Discord.SeverityThreshold), msg.severity) {
+			return false
+		}
 		whichMap = alarms.SentDiAlarms
 		service = "Discord"
 	case slk:
+		if !slices.Contains(SeverityThresholdToSeverities(msg.alertConfig.Slack.SeverityThreshold), msg.severity) {
+			return false
+		}
 		whichMap = alarms.SentSlkAlarms
 		service = "Slack"
 	}
 
 	switch {
 	case !whichMap[msg.message].IsZero() && !msg.resolved:
-		// already sent this alert
+		// TODO: this is a temporary solution for sending proposal reminders, ideally we should make this feature more general and configurable
+		// Check if this is a proposal alert that should be re-sent
+		if strings.Contains(strings.ToLower(msg.message), "open proposal") {
+			// Check if it has been 6 hours since the last (re-)send
+			if whichMap[msg.message].Before(time.Now().Add(-1 * time.Duration(td.GovernanceAlertsReminderInterval) * time.Hour)) {
+				l(fmt.Sprintf("🔄 RE-SENDING ALERT on %s (%s) - notifying %s", msg.chain, msg.message, service))
+				whichMap[msg.message] = time.Now()
+				return true
+			}
+		}
 		return false
 	case !whichMap[msg.message].IsZero() && msg.resolved:
 		// alarm is cleared
@@ -381,6 +404,7 @@ func (c *Config) alert(chainName, message, severity string, resolved bool, id *s
 		discHook:     c.Chains[chainName].Alerts.Discord.Webhook,
 		discMentions: strings.Join(c.Chains[chainName].Alerts.Discord.Mentions, " "),
 		slkHook:      c.Chains[chainName].Alerts.Slack.Webhook,
+		alertConfig:  &c.Chains[chainName].Alerts,
 	}
 	c.alertChan <- a
 	c.chainsMux.RUnlock()
@@ -402,7 +426,7 @@ func (c *Config) alert(chainName, message, severity string, resolved bool, id *s
 // and also updates a few prometheus stats
 // FIXME: not watching for nodes that are lagging the head block!
 func (cc *ChainConfig) watch() {
-	var missedAlarm, pctAlarm, noNodes, emptyBlocksAlarm, emptyPctAlarm bool
+	var missedAlarm, pctAlarm, noNodes, emptyBlocksAlarm, emptyPctAlarm, stakeChangeAlarm, unclaimedRewardsAlarm bool
 	inactive := "jailed"
 	nodeAlarms := make(map[string]bool)
 
@@ -511,7 +535,7 @@ func (cc *ChainConfig) watch() {
 				td.alert(
 					cc.name,
 					fmt.Sprintf("%s is no longer active: validator %s is %s for chainid %s", cc.valInfo.Moniker, cc.ValAddress, inactive, cc.ChainId),
-					"info",
+					"critical",
 					true,
 					&id,
 				)
@@ -538,7 +562,7 @@ func (cc *ChainConfig) watch() {
 			td.alert(
 				cc.name,
 				fmt.Sprintf("%s has missed %d blocks on %s", cc.valInfo.Moniker, cc.Alerts.ConsecutiveMissed, cc.ChainId),
-				"info",
+				cc.Alerts.ConsecutivePriority,
 				true,
 				&id,
 			)
@@ -565,7 +589,7 @@ func (cc *ChainConfig) watch() {
 			td.alert(
 				cc.name,
 				fmt.Sprintf("%s has missed > %d%% of the slashing window's blocks on %s", cc.valInfo.Moniker, cc.Alerts.Window, cc.ChainId),
-				"info",
+				cc.Alerts.PercentagePriority,
 				true,
 				&id,
 			)
@@ -592,7 +616,7 @@ func (cc *ChainConfig) watch() {
 			td.alert(
 				cc.name,
 				fmt.Sprintf("%s has proposed %d consecutive empty blocks on %s", cc.valInfo.Moniker, cc.Alerts.ConsecutiveEmpty, cc.ChainId),
-				"info",
+				cc.Alerts.ConsecutiveEmptyPriority,
 				true,
 				&id,
 			)
@@ -634,7 +658,7 @@ func (cc *ChainConfig) watch() {
 					int(cc.statTotalPropsEmpty),
 					int(cc.statTotalProps),
 					cc.ChainId),
-				"info",
+				cc.Alerts.EmptyPercentagePriority,
 				true,
 				&id,
 			)
@@ -667,7 +691,7 @@ func (cc *ChainConfig) watch() {
 				td.alert(
 					cc.name,
 					fmt.Sprintf("Severity: %s\nRPC node %s has been down for > %d minutes on %s", td.NodeDownSeverity, node.Url, td.NodeDownMin, cc.ChainId),
-					"info",
+					td.NodeDownSeverity,
 					true,
 					&node.Url,
 				)
@@ -675,21 +699,78 @@ func (cc *ChainConfig) watch() {
 			}
 		}
 
+		// validator stake change alerts
+		if cc.Alerts.StakeChangeAlerts && cc.valInfo != nil && cc.lastValInfo != nil {
+			stakeChangePercent := (cc.valInfo.DelegatedTokens - cc.lastValInfo.DelegatedTokens) / cc.lastValInfo.DelegatedTokens
+			trend := "increased"
+			threshold := cc.Alerts.StakeChangeIncreaseThreshold
+			if stakeChangePercent < 0 {
+				trend = "dropped"
+				threshold = cc.Alerts.StakeChangeDropThreshold
+			}
+			id := cc.valInfo.Valcons + "_stake_change"
+			severity := "warning"
+			message := fmt.Sprintf("%s's stake has %s more than %.1g%% compared to the previous check", cc.valInfo.Moniker, trend, threshold*100)
+			if math.Abs(stakeChangePercent) >= threshold {
+				td.alert(cc.name, message, severity, false, &id)
+				stakeChangeAlarm = true
+			} else {
+				if stakeChangeAlarm {
+					td.alert(cc.name, message, severity, true, &id)
+					stakeChangeAlarm = false
+
+				}
+			}
+		}
+
+		// validator unclaimed rewards alert
+		if cc.Alerts.UnclaimedRewardsAlerts && td.PriceConversion.Enabled && cc.valInfo.SelfDelegationRewards != nil && cc.valInfo.Commission != nil {
+			totalRewards := github_com_cosmos_cosmos_sdk_types.DecCoin{
+				Denom:  (*cc.valInfo.SelfDelegationRewards)[0].Denom,
+				Amount: github_com_cosmos_cosmos_sdk_types.ZeroDec(),
+			}
+			totalRewards = totalRewards.Add((*cc.valInfo.SelfDelegationRewards)[0])
+			totalRewards = totalRewards.Add((*cc.valInfo.Commission)[0])
+			coinPrice, err := td.coinMarketCapClient.GetPrice(td.ctx, cc.Slug)
+			if err == nil {
+				totalRewardsConverted := totalRewards.Amount.MustFloat64() * coinPrice.Price
+				id := cc.valInfo.Valcons + "_unclaimed_rewards"
+				severity := "warning"
+				message := fmt.Sprintf("%s has more than %.0f %s unclaimed rewards on %s", cc.valInfo.Moniker, cc.Alerts.UnclaimedRewardsThreshold, td.PriceConversion.Currency, cc.name)
+				if totalRewardsConverted > cc.Alerts.UnclaimedRewardsThreshold {
+					td.alert(cc.name, message, severity, false, &id)
+					unclaimedRewardsAlarm = true
+				} else {
+					if unclaimedRewardsAlarm {
+						td.alert(cc.name, message, severity, true, &id)
+						unclaimedRewardsAlarm = false
+					}
+				}
+				cc.activeAlerts = alarms.getCount(cc.name)
+			}
+		}
+
 		// there are open proposals that the validator has not voted on
 		idTemplate := "%s_gov_voting_%d"
-		msgTemplate := "[WARNING] There is an open proposal (#%v) that the validator has not voted on"
+		msgTemplate := "[WARNING] There is an open proposal (#%v) that the validator has not voted on %s%s"
 
 		// Create a map for faster lookups of unvoted proposal IDs
 		unvotedProposalMap := make(map[uint64]bool)
-		for _, id := range cc.unvotedOpenGovProposalIds {
-			unvotedProposalMap[id] = true
+		for _, proposal := range cc.unvotedOpenGovProposals {
+			unvotedProposalMap[proposal.ProposalId] = true
 		}
 
 		// Only send governance alerts if they're enabled
 		if cc.Alerts.GovernanceAlerts {
-			for _, proposalID := range cc.unvotedOpenGovProposalIds {
-				id := fmt.Sprintf(idTemplate, cc.valInfo.Valcons, proposalID)
-				alertMsg := fmt.Sprintf(msgTemplate, proposalID)
+			for _, proposal := range cc.unvotedOpenGovProposals {
+				id := fmt.Sprintf(idTemplate, cc.valInfo.Valcons, proposal.ProposalId)
+				deadline := fmt.Sprintf(", deadline: %s UTC", proposal.VotingEndTime.Format("2006-01-02 15:04"))
+				if cc.Provider.Name == "namada" {
+					// for Namada the voting end time might be calculated by the endEpoch so it is not super accurate
+					// currently Tenderduty considers alerts with different messages as different alerts so we have to disable this feature for Namada
+					deadline = ""
+				}
+				alertMsg := fmt.Sprintf(msgTemplate, proposal.ProposalId, cc.name, deadline)
 
 				// Send alert for this specific proposal
 				td.alert(
@@ -705,7 +786,7 @@ func (cc *ChainConfig) watch() {
 		// check and resolve the alert if the proposal has been voted on
 		// compile the regex to extract proposal IDs - match any digits after "proposal (#"
 		proposalRegex := regexp.MustCompile(`proposal \(#(\d+)\)`)
-		var idsToBeResolved []string
+		messagesToBeResolved := make(map[uint64]string)
 
 		// Use RLock to safely read the alerts map
 		alarms.notifyMux.RLock()
@@ -720,7 +801,7 @@ func (cc *ChainConfig) watch() {
 					if proposalID, err := strconv.ParseUint(matches[1], 10, 64); err == nil {
 						// If this proposal ID is no longer in our unvoted list, we should clear it
 						if !unvotedProposalMap[proposalID] {
-							idsToBeResolved = append(idsToBeResolved, matches[1])
+							messagesToBeResolved[proposalID] = alertMsg
 						}
 					}
 				}
@@ -728,14 +809,13 @@ func (cc *ChainConfig) watch() {
 		}
 
 		alarms.notifyMux.RUnlock()
-		for _, proposalID := range idsToBeResolved {
+		for proposalID, alertMsg := range messagesToBeResolved {
 			id := fmt.Sprintf(idTemplate, cc.valInfo.Valcons, proposalID)
-			alertMsg := fmt.Sprintf(msgTemplate, proposalID)
 
 			td.alert(
 				cc.name,
 				alertMsg,
-				"info",
+				"warning",
 				true,
 				&id,
 			)

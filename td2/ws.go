@@ -195,7 +195,19 @@ func (cc *ChainConfig) WsRun() {
 							Height:                  update.Height,
 							LastError:               info,
 							Blocks:                  cc.blocksResults,
-							UnvotedOpenGovProposals: len(cc.unvotedOpenGovProposalIds),
+							UnvotedOpenGovProposals: len(cc.unvotedOpenGovProposals),
+							TotalBondedTokens:       cc.totalBondedTokens,
+							TotalSupply:             cc.totalSupply,
+							CommunityTax:            cc.communityTax,
+							InflationRate:           cc.inflationRate,
+							BaseAPR:                 cc.baseAPR,
+							VotingPowerPercent:      cc.valInfo.VotingPowerPercent,
+							DelegatedTokens:         cc.valInfo.DelegatedTokens,
+							CommissionRate:          cc.valInfo.CommissionRate,
+							ValidatorAPR:            cc.valInfo.ValidatorAPR,
+							SelfDelegationRewards:   cc.valInfo.SelfDelegationRewards,
+							Commission:              cc.valInfo.Commission,
+							CryptoPrice:             cc.cryptoPrice,
 						}
 					}
 

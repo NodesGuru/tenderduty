@@ -16,8 +16,12 @@ import (
 	"time"
 
 	cosmos_sdk_types "github.com/cosmos/cosmos-sdk/types"
+	github_com_cosmos_cosmos_sdk_types "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/types/bech32"
+	bank "github.com/cosmos/cosmos-sdk/x/bank/types"
+	gov "github.com/cosmos/cosmos-sdk/x/gov/types"
 	slashing "github.com/cosmos/cosmos-sdk/x/slashing/types"
+	staking "github.com/cosmos/cosmos-sdk/x/staking/types"
 	namada "github.com/firstset/tenderduty/v2/td2/namada"
 	"github.com/near/borsh-go"
 	rpchttp "github.com/tendermint/tendermint/rpc/client/http"
@@ -27,7 +31,7 @@ type NamadaProvider struct {
 	ChainConfig *ChainConfig
 }
 
-func getVotingPeriodProposalIds(httpClient *http.Client, indexers []string) ([]string, error) {
+func getVotingPeriodProposals(httpClient *http.Client, indexers []string) ([]gov.Proposal, error) {
 	// Store the last error to return if all indexer endpoints fail
 	var lastErr error
 
@@ -37,6 +41,7 @@ func getVotingPeriodProposalIds(httpClient *http.Client, indexers []string) ([]s
 
 	// Slice to store proposal IDs
 	votingPeriodProposalIds := []string{}
+	votingPeriodProposals := []gov.Proposal{}
 
 	// Try each indexer in the list
 	for _, indexer := range indexers {
@@ -58,36 +63,39 @@ func getVotingPeriodProposalIds(httpClient *http.Client, indexers []string) ([]s
 		func() {
 			defer resp.Body.Close()
 
-			var respJson map[string]any
+			var respJson namada.NamadaProposalResponse
 			if err = json.NewDecoder(resp.Body).Decode(&respJson); err != nil {
 				lastErr = err
 				return
 			}
 
-			if results, ok := respJson["results"].([]any); ok {
-				for _, proposal := range results {
-					if vMap, ok := proposal.(map[string]any); ok {
-						if id, ok := vMap["id"].(string); ok && !slices.Contains(votingPeriodProposalIds, id) {
-							votingPeriodProposalIds = append(votingPeriodProposalIds, id)
-						}
-					}
+			// Process each proposal
+			for _, namadaProposal := range respJson.Results {
+				govProposal, err := namadaProposal.ToGovProposal()
+				if err != nil {
+					// Log error but continue with other proposals
+					l(fmt.Sprintf("Failed to convert proposal %s: %v", namadaProposal.ID, err))
+					continue
+				}
+				if !slices.Contains(votingPeriodProposalIds, namadaProposal.ID) {
+					votingPeriodProposals = append(votingPeriodProposals, *govProposal)
 				}
 			}
 		}()
 
 		// If we found proposals with this node, return them
 		if len(votingPeriodProposalIds) > 0 {
-			return votingPeriodProposalIds, nil
+			return votingPeriodProposals, nil
 		}
 	}
 
-	return votingPeriodProposalIds, lastErr
+	return votingPeriodProposals, lastErr
 }
 
-func (d *NamadaProvider) QueryUnvotedOpenProposalIds(ctx context.Context) ([]uint64, error) {
+func (d *NamadaProvider) QueryUnvotedOpenProposals(ctx context.Context) ([]gov.Proposal, error) {
 	// Store the last error to return if all indexer endpoints fail
 	var lastErr error
-	var unVotedProposalIds []uint64
+	var unVotedProposals []gov.Proposal
 
 	indexers, ok1 := d.ChainConfig.Provider.Configs["indexers"].([]any)
 	validatorAddress, ok2 := d.ChainConfig.Provider.Configs["validator_address"].(string)
@@ -108,8 +116,8 @@ func (d *NamadaProvider) QueryUnvotedOpenProposalIds(ctx context.Context) ([]uin
 			}
 		}
 
-		votingPeriodProposalIds, err := getVotingPeriodProposalIds(httpClient, urls)
-		votedProposalIds := []string{}
+		votingPeriodProposals, err := getVotingPeriodProposals(httpClient, urls)
+		votedProposalIds := []float64{}
 		if err != nil {
 			return nil, err
 		}
@@ -143,33 +151,31 @@ func (d *NamadaProvider) QueryUnvotedOpenProposalIds(ctx context.Context) ([]uin
 
 				// check the voting results
 				for _, vote := range results {
-					if id, ok := vote["proposalId"].(float64); ok && !slices.Contains(votedProposalIds, strconv.Itoa(int(id))) {
-						votedProposalIds = append(votedProposalIds, strconv.Itoa(int(id)))
+					if idFloat, ok := vote["proposalId"].(float64); ok {
+						if !slices.Contains(votedProposalIds, idFloat) {
+							votedProposalIds = append(votedProposalIds, idFloat)
+						}
 					}
 				}
 			}()
 		}
 
-		for _, id := range votingPeriodProposalIds {
-			if !slices.Contains(votedProposalIds, id) {
-				if idUint, err := strconv.ParseUint(id, 10, 64); err == nil {
-					unVotedProposalIds = append(unVotedProposalIds, idUint)
-				} else {
-					l(fmt.Sprintf("🛑 error converting proposal ID %s to uint64: %v", id, err))
-				}
+		for _, proposal := range votingPeriodProposals {
+			if !slices.Contains(votedProposalIds, float64(proposal.ProposalId)) {
+				unVotedProposals = append(unVotedProposals, proposal)
 			}
 		}
 	}
 
-	return unVotedProposalIds, lastErr
+	return unVotedProposals, lastErr
 }
 
-func (d *NamadaProvider) QueryValidatorInfo(ctx context.Context) (pub []byte, moniker string, jailed bool, bonded bool, err error) {
+func (d *NamadaProvider) QueryValidatorInfo(ctx context.Context) (pub []byte, moniker string, jailed bool, bonded bool, delegatedTokens float64, commissionRate float64, err error) {
 	hexAddress := ""
 	if strings.Contains(d.ChainConfig.ValAddress, "valcons") {
 		_, bz, err := bech32.DecodeAndConvert(d.ChainConfig.ValAddress)
 		if err != nil {
-			return nil, "", false, false, errors.New("could not decode and convert your address " + d.ChainConfig.ValAddress)
+			return nil, "", false, false, 0, 0, errors.New("could not decode and convert your address " + d.ChainConfig.ValAddress)
 		}
 		hexAddress = fmt.Sprintf("%X", bz)
 	}
@@ -179,13 +185,13 @@ func (d *NamadaProvider) QueryValidatorInfo(ctx context.Context) (pub []byte, mo
 	if ok {
 		response, err := d.ChainConfig.client.ABCIQuery(ctx, fmt.Sprintf("/vp/pos/validator/state/%s", validatorAddress), nil)
 		if err != nil {
-			return nil, "", false, false, errors.New("failed to query Namada validator's state " + validatorAddress)
+			return nil, "", false, false, 0, 0, errors.New("failed to query Namada validator's state " + validatorAddress)
 		}
 
 		state := namada.ValidatorStateInfo{}
 		err = borsh.Deserialize(&state, response.Response.Value)
 		if err != nil {
-			return nil, "", false, false, fmt.Errorf("unmarshal validator state: %w", err)
+			return nil, "", false, false, 0, 0, fmt.Errorf("unmarshal validator state: %w", err)
 		}
 		info := ValInfo{}
 		info.Bonded = state.State != nil && *state.State == namada.ValidatorStateConsensus
@@ -193,20 +199,53 @@ func (d *NamadaProvider) QueryValidatorInfo(ctx context.Context) (pub []byte, mo
 
 		response, err = d.ChainConfig.client.ABCIQuery(ctx, fmt.Sprintf("/vp/pos/validator/metadata/%s", validatorAddress), nil)
 		if err != nil {
-			return nil, "", false, false, fmt.Errorf("query validator metadata: %w", err)
+			return nil, "", false, false, 0, 0, fmt.Errorf("query validator metadata: %w", err)
 		}
 		metadata := namada.ValidatorMetaData{}
 		err = borsh.Deserialize(&metadata, response.Response.Value)
 		if err != nil {
-			return nil, "", false, false, fmt.Errorf("unmarshal validator metadata: %w", err)
+			return nil, "", false, false, 0, 0, fmt.Errorf("unmarshal validator metadata: %w", err)
 		}
 		if metadata.Metadata != nil && metadata.Metadata.Name != nil {
 			info.Moniker = *metadata.Metadata.Name
 		}
-		return ToBytes(hexAddress), info.Moniker, info.Jailed, info.Bonded, nil
+
+		response, err = d.ChainConfig.client.ABCIQuery(ctx, fmt.Sprintf("/vp/pos/validator/stake/%s", validatorAddress), nil)
+		if err != nil {
+			return nil, "", false, false, 0, 0, fmt.Errorf("query validator stake: %w", err)
+		}
+		var stake *namada.Dec
+		err = borsh.Deserialize(&stake, response.Response.Value)
+		if err != nil {
+			return nil, "", false, false, 0, 0, fmt.Errorf("unmarshal validator stake: %w", err)
+		}
+		if stake != nil {
+			delegatedTokensFloat, err := strconv.ParseFloat(stake.Raw.String(), 64)
+			if err == nil {
+				// not sure about the rationale behind yet but the value is uint and it needs to be divivded by 1e6 to get the correct precision
+				info.DelegatedTokens = delegatedTokensFloat / 1000000
+			}
+		}
+
+		response, err = d.ChainConfig.client.ABCIQuery(ctx, fmt.Sprintf("/vp/pos/validator/commission/%s", validatorAddress), nil)
+		if err != nil {
+			return nil, "", false, false, 0, 0, fmt.Errorf("query validator commission rate: %w", err)
+		}
+		commission := namada.ValidatorCommissionPair{}
+		err = borsh.Deserialize(&commission, response.Response.Value)
+		if err != nil {
+			return nil, "", false, false, 0, 0, fmt.Errorf("unmarshal validator commission pair: %w", err)
+		}
+		if commission.CommissionRate != nil {
+			commissionRateFloat, err := strconv.ParseFloat((*commission.CommissionRate).String(), 64)
+			if err == nil {
+				info.CommissionRate = commissionRateFloat
+			}
+		}
+		return ToBytes(hexAddress), info.Moniker, info.Jailed, info.Bonded, info.DelegatedTokens, info.CommissionRate, nil
 	}
 
-	return ToBytes(hexAddress), d.ChainConfig.ValAddress, false, true, nil
+	return ToBytes(hexAddress), d.ChainConfig.ValAddress, false, true, 0, 0, nil
 }
 
 func getLivenessInfo(ctx context.Context, client *rpchttp.HTTP) (*namada.LivenessInfo, error) {
@@ -248,4 +287,137 @@ func (d *NamadaProvider) QuerySlashingParams(ctx context.Context) (*slashing.Par
 	}
 
 	return &slashing.Params{SignedBlocksWindow: int64(livenessInfo.LivenessWindowLen), MinSignedPerWindow: cosmos_sdk_types.MustNewDecFromStr(livenessInfo.LivenessThreshold.String())}, nil
+}
+
+func (d *NamadaProvider) QueryDenomMetadata(ctx context.Context, denom string) (medatada *bank.Metadata, err error) {
+	return nil, errors.New("QueryDenomMetadata with ABCIQuery not implemented for Namada")
+}
+
+func (d *NamadaProvider) QueryValidatorSelfDelegationRewardsAndCommission(ctx context.Context) (rewards *github_com_cosmos_cosmos_sdk_types.DecCoins, commission *github_com_cosmos_cosmos_sdk_types.DecCoins, err error) {
+	// Store the last error to return if all indexer endpoints fail
+	var lastErr error
+	// In Namada we don't query self-delegation rewards, this field will be kept as 0
+	resultRewards := github_com_cosmos_cosmos_sdk_types.DecCoins{
+		github_com_cosmos_cosmos_sdk_types.NewDecCoin("unam", github_com_cosmos_cosmos_sdk_types.ZeroInt()),
+	}
+	resultCommission := github_com_cosmos_cosmos_sdk_types.DecCoins{
+		github_com_cosmos_cosmos_sdk_types.NewDecCoin("unam", github_com_cosmos_cosmos_sdk_types.ZeroInt()),
+	}
+
+	indexers, ok1 := d.ChainConfig.Provider.Configs["indexers"].([]any)
+	validatorAddress, ok2 := d.ChainConfig.Provider.Configs["validator_address"].(string)
+	if ok1 && ok2 {
+		// Create a reusable HTTP client with timeout
+		tr := &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: td.TLSSkipVerify},
+		}
+		httpClient := &http.Client{
+			Transport: tr,
+			Timeout:   5 * time.Second, // Add reasonable timeout
+		}
+		// Try each indexer in the list
+		for _, indexer := range indexers {
+			reqURL := fmt.Sprintf("%s/api/v1/pos/reward/%s", indexer, validatorAddress)
+
+			// Make the HTTP request
+			req, err := http.NewRequest("GET", reqURL, nil)
+			if err != nil {
+				lastErr = err
+				continue // Try next node
+			}
+
+			resp, err := httpClient.Do(req)
+			if err != nil {
+				lastErr = err
+				continue // Try next node
+			}
+
+			func() {
+				defer resp.Body.Close()
+
+				var respJson []namada.NamadaValidatorRewardsResponse
+				if err = json.NewDecoder(resp.Body).Decode(&respJson); err != nil {
+					lastErr = err
+					return
+				}
+
+				if len(respJson) > 0 {
+					value, ok := github_com_cosmos_cosmos_sdk_types.NewIntFromString(respJson[0].MinDenomAmount)
+					if ok {
+						resultCommission[0].Amount = value.ToDec()
+					}
+				}
+			}()
+
+			if resultCommission[0].Amount.IsPositive() {
+				// means the query was successful
+				return &resultRewards, &resultCommission, nil
+			}
+		}
+	}
+	return &resultRewards, &resultCommission, lastErr
+}
+
+func (d *NamadaProvider) QueryValidatorVotingPool(ctx context.Context) (votingPool *staking.Pool, err error) {
+	// Store the last error to return if all indexer endpoints fail
+	var lastErr error
+	var result *staking.Pool
+	indexers, ok := d.ChainConfig.Provider.Configs["indexers"].([]any)
+
+	if ok {
+		// Create a reusable HTTP client with timeout
+		tr := &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: td.TLSSkipVerify},
+		}
+		httpClient := &http.Client{
+			Transport: tr,
+			Timeout:   5 * time.Second, // Add reasonable timeout
+		}
+		// Try each indexer in the list
+		for _, indexer := range indexers {
+			reqURL := fmt.Sprintf("%s/api/v1/pos/voting-power", indexer)
+
+			// Make the HTTP request
+			req, err := http.NewRequest("GET", reqURL, nil)
+			if err != nil {
+				lastErr = err
+				continue // Try next node
+			}
+
+			resp, err := httpClient.Do(req)
+			if err != nil {
+				lastErr = err
+				continue // Try next node
+			}
+
+			func() {
+				defer resp.Body.Close()
+
+				var respJson namada.NamadaVotingPowerResponse
+				if err = json.NewDecoder(resp.Body).Decode(&respJson); err != nil {
+					lastErr = err
+					return
+				}
+
+				bondedTokens, ok := github_com_cosmos_cosmos_sdk_types.NewIntFromString(respJson.TotalVotingPower)
+				if ok {
+					result = &staking.Pool{
+						NotBondedTokens: github_com_cosmos_cosmos_sdk_types.ZeroInt(), // we ommit this field in Namada
+						BondedTokens:    bondedTokens,
+					}
+				}
+			}()
+
+			if result != nil {
+				return result, nil
+			}
+		}
+	}
+	return nil, lastErr
+}
+
+func (d *NamadaProvider) QueryChainInfo(ctx context.Context) (totalSupply float64, communityTax float64, inflationRate float64, err error) {
+	// TODO: leave it here for now, Namada has a quite different way of calculating the inflation rate
+	// see more details here https://specs.namada.net/modules/proof-of-stake/inflation-system#proof-of-stake-rewards
+	return 0, 0, 0, errors.New("CalculateAPR not implemented for Namada")
 }
