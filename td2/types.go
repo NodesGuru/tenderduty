@@ -371,6 +371,11 @@ func validateConfig(c *Config) (fatal bool, problems []string) {
 		problems = append(problems, "warning: setting 'node_down_alert_minutes' to less than three minutes might result in false alarms")
 	}
 
+	// when undefined, or invalid, we set 6 as the default value
+	if c.GovernanceAlertsReminderInterval <= 0 {
+		c.GovernanceAlertsReminderInterval = 6
+	}
+
 	var wantsPublic bool
 	for k, v := range c.Chains {
 		if v.blocksResults == nil {
@@ -388,57 +393,8 @@ func validateConfig(c *Config) (fatal bool, problems []string) {
 
 		v.valInfo = &ValInfo{Moniker: "not connected"}
 
-		// when undefined, or invalid, we set 6 as the default value
-		if c.GovernanceAlertsReminderInterval <= 0 {
-			c.GovernanceAlertsReminderInterval = 6
-		}
-
-		// the bools for enabling alerts are deprecated with full configs preferred,
-		// don't break if someone is still using them:
-		if v.Alerts.DiscordAlerts && !v.Alerts.Discord.Enabled {
-			v.Alerts.Discord.Enabled = true
-		}
-		if v.Alerts.TelegramAlerts && !v.Alerts.Telegram.Enabled {
-			v.Alerts.Telegram.Enabled = true
-		}
-		if v.Alerts.PagerdutyAlerts && !v.Alerts.Pagerduty.Enabled {
-			v.Alerts.Pagerduty.Enabled = true
-		}
-
-		// default values for severity thresholds
-		if c.DefaultAlertConfig.Discord.SeverityThreshold == "" {
-			c.DefaultAlertConfig.Discord.SeverityThreshold = "info"
-		}
-		if c.DefaultAlertConfig.Slack.SeverityThreshold == "" {
-			c.DefaultAlertConfig.Slack.SeverityThreshold = "info"
-		}
-		if c.DefaultAlertConfig.Telegram.SeverityThreshold == "" {
-			c.DefaultAlertConfig.Telegram.SeverityThreshold = "info"
-		}
-		if c.DefaultAlertConfig.Pagerduty.SeverityThreshold == "" {
-			c.DefaultAlertConfig.Pagerduty.SeverityThreshold = "critical"
-		}
-
 		applyAlertDefaults(&v.Alerts, &c.DefaultAlertConfig)
 
-		switch {
-		case v.Alerts.Slack.Enabled && !c.DefaultAlertConfig.Slack.Enabled:
-			problems = append(problems, fmt.Sprintf("warn: %20s is configured for slack alerts, but it is not enabled", k))
-			fallthrough
-		case v.Alerts.Discord.Enabled && !c.DefaultAlertConfig.Discord.Enabled:
-			problems = append(problems, fmt.Sprintf("warn: %20s is configured for discord alerts, but it is not enabled", k))
-			fallthrough
-		case v.Alerts.Pagerduty.Enabled && !c.DefaultAlertConfig.Pagerduty.Enabled:
-			problems = append(problems, fmt.Sprintf("warn: %20s is configured for pagerduty alerts, but it is not enabled", k))
-			fallthrough
-		case v.Alerts.Telegram.Enabled && !c.DefaultAlertConfig.Telegram.Enabled:
-			problems = append(problems, fmt.Sprintf("warn: %20s is configured for telegram alerts, but it is not enabled", k))
-		case !v.Alerts.ConsecutiveAlerts && !v.Alerts.PercentageAlerts && !v.Alerts.AlertIfInactive && !v.Alerts.AlertIfNoServers && !v.Alerts.ConsecutiveEmptyAlerts && !v.Alerts.EmptyPercentageAlerts:
-			problems = append(problems, fmt.Sprintf("warn: %20s has no alert types configured", k))
-			fallthrough
-		case !v.Alerts.Pagerduty.Enabled && !v.Alerts.Discord.Enabled && !v.Alerts.Telegram.Enabled && !v.Alerts.Slack.Enabled:
-			problems = append(problems, fmt.Sprintf("warn: %20s has no notifications configured", k))
-		}
 		if td.EnableDash {
 			td.updateChan <- &dash.ChainStatus{
 				MsgType:                 "status",
