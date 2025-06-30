@@ -100,7 +100,7 @@ chains:
     slug: osmosis
 
     # Without specifying this option, the inflationRate is queried from a RPC call, but it may not be available for some chains
-    # If the inflration rate cannot be queried, you can use this option to explicitly set the value
+    # If the inflation rate cannot be queried, you can use this option to explicitly set the value
     inflationRate: 0.04
 
     # Controls various alert settings for each chain.
