@@ -388,10 +388,10 @@ func (c *Config) alert(chainName, message, severity string, resolved bool, id *s
 	}
 	c.chainsMux.RLock()
 	a := &alertMsg{
-		pd:           c.Pagerduty.Enabled && c.Chains[chainName].Alerts.Pagerduty.Enabled,
-		disc:         c.Discord.Enabled && c.Chains[chainName].Alerts.Discord.Enabled,
-		tg:           c.Telegram.Enabled && c.Chains[chainName].Alerts.Telegram.Enabled,
-		slk:          c.Slack.Enabled && c.Chains[chainName].Alerts.Slack.Enabled,
+		pd:           c.DefaultAlertConfig.Pagerduty.Enabled && c.Chains[chainName].Alerts.Pagerduty.Enabled,
+		disc:         c.DefaultAlertConfig.Discord.Enabled && c.Chains[chainName].Alerts.Discord.Enabled,
+		tg:           c.DefaultAlertConfig.Telegram.Enabled && c.Chains[chainName].Alerts.Telegram.Enabled,
+		slk:          c.DefaultAlertConfig.Slack.Enabled && c.Chains[chainName].Alerts.Slack.Enabled,
 		severity:     severity,
 		resolved:     resolved,
 		chain:        fmt.Sprintf("%s (%s)", chainName, c.Chains[chainName].ChainId),

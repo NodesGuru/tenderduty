@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"reflect"
 	"regexp"
 	"slices"
 	"strings"
@@ -51,6 +52,30 @@ func SeverityThresholdToSeverities(threhold string) []string {
 	return severities
 }
 
+// applyAlertDefaults copies zero-value fields from src to dst recursively.
+func applyAlertDefaults(dst, src any) {
+	dv := reflect.ValueOf(dst).Elem()
+	sv := reflect.ValueOf(src).Elem()
+	for i := 0; i < dv.NumField(); i++ {
+		df := dv.Field(i)
+		sf := sv.Field(i)
+		if !df.CanSet() {
+			continue
+		}
+		if df.Kind() == reflect.Struct {
+			applyAlertDefaults(df.Addr().Interface(), sf.Addr().Interface())
+			continue
+		}
+		if isZero(df) {
+			df.Set(sf)
+		}
+	}
+}
+
+func isZero(v reflect.Value) bool {
+	return reflect.DeepEqual(v.Interface(), reflect.Zero(v.Type()).Interface())
+}
+
 // Config holds both the settings for tenderduty to monitor and state information while running.
 type Config struct {
 	alertChan           chan *alertMsg // channel used for outgoing notifications
@@ -85,14 +110,9 @@ type Config struct {
 	// PrometheusListenPort is the port number used by the prometheus web server
 	PrometheusListenPort int `yaml:"prometheus_listen_port"`
 
-	// Pagerduty configuration values
-	Pagerduty PDConfig `yaml:"pagerduty"`
-	// Discord webhook information
-	Discord DiscordConfig `yaml:"discord"`
-	// Telegram api information
-	Telegram TeleConfig `yaml:"telegram"`
-	// Slack webhook information
-	Slack SlackConfig `yaml:"slack"`
+	// DefaultAlertConfig defines the default alert settings which can be
+	// overridden on a per chain basis in the `alerts` section.
+	DefaultAlertConfig AlertConfig `yaml:"default_alert_config"`
 	// Healthcheck information
 	Healthcheck HealthcheckConfig `yaml:"healthcheck"`
 
@@ -339,9 +359,9 @@ func validateConfig(c *Config) (fatal bool, problems []string) {
 		}
 	}
 
-	if c.Pagerduty.Enabled {
+	if c.DefaultAlertConfig.Pagerduty.Enabled {
 		rex := regexp.MustCompile(`[+_-]`)
-		if rex.MatchString(c.Pagerduty.ApiKey) {
+		if rex.MatchString(c.DefaultAlertConfig.Pagerduty.ApiKey) {
 			fatal = true
 			problems = append(problems, "error: The Pagerduty key provided appears to be an Oauth token, not a V2 Events API key.")
 		}
@@ -386,63 +406,32 @@ func validateConfig(c *Config) (fatal bool, problems []string) {
 		}
 
 		// default values for severity thresholds
-		if c.Discord.SeverityThreshold == "" {
-			c.Discord.SeverityThreshold = "info"
+		if c.DefaultAlertConfig.Discord.SeverityThreshold == "" {
+			c.DefaultAlertConfig.Discord.SeverityThreshold = "info"
 		}
-		if c.Slack.SeverityThreshold == "" {
-			c.Slack.SeverityThreshold = "info"
+		if c.DefaultAlertConfig.Slack.SeverityThreshold == "" {
+			c.DefaultAlertConfig.Slack.SeverityThreshold = "info"
 		}
-		if c.Telegram.SeverityThreshold == "" {
-			c.Telegram.SeverityThreshold = "info"
+		if c.DefaultAlertConfig.Telegram.SeverityThreshold == "" {
+			c.DefaultAlertConfig.Telegram.SeverityThreshold = "info"
 		}
-		if c.Pagerduty.SeverityThreshold == "" {
-			c.Pagerduty.SeverityThreshold = "critical"
+		if c.DefaultAlertConfig.Pagerduty.SeverityThreshold == "" {
+			c.DefaultAlertConfig.Pagerduty.SeverityThreshold = "critical"
 		}
 
-		// if the settings are blank, copy in the defaults:
-		if v.Alerts.Discord.Webhook == "" {
-			v.Alerts.Discord.Webhook = c.Discord.Webhook
-			v.Alerts.Discord.Mentions = c.Discord.Mentions
-		}
-		if v.Alerts.Discord.SeverityThreshold == "" {
-			v.Alerts.Discord.SeverityThreshold = c.Discord.SeverityThreshold
-		}
-		if v.Alerts.Slack.Webhook == "" {
-			v.Alerts.Slack.Webhook = c.Slack.Webhook
-			v.Alerts.Slack.Mentions = c.Slack.Mentions
-		}
-		if v.Alerts.Slack.SeverityThreshold == "" {
-			v.Alerts.Slack.SeverityThreshold = c.Slack.SeverityThreshold
-		}
-		if v.Alerts.Telegram.ApiKey == "" {
-			v.Alerts.Telegram.ApiKey = c.Telegram.ApiKey
-			v.Alerts.Telegram.Mentions = c.Telegram.Mentions
-		}
-		if v.Alerts.Telegram.SeverityThreshold == "" {
-			v.Alerts.Telegram.SeverityThreshold = c.Telegram.SeverityThreshold
-		}
-		if v.Alerts.Telegram.Channel == "" {
-			v.Alerts.Telegram.Channel = c.Telegram.Channel
-		}
-		if v.Alerts.Pagerduty.ApiKey == "" {
-			v.Alerts.Pagerduty.ApiKey = c.Pagerduty.ApiKey
-			v.Alerts.Pagerduty.DefaultSeverity = c.Pagerduty.DefaultSeverity
-		}
-		if v.Alerts.Pagerduty.SeverityThreshold == "" {
-			v.Alerts.Pagerduty.SeverityThreshold = c.Pagerduty.SeverityThreshold
-		}
+		applyAlertDefaults(&v.Alerts, &c.DefaultAlertConfig)
 
 		switch {
-		case v.Alerts.Slack.Enabled && !c.Slack.Enabled:
+		case v.Alerts.Slack.Enabled && !c.DefaultAlertConfig.Slack.Enabled:
 			problems = append(problems, fmt.Sprintf("warn: %20s is configured for slack alerts, but it is not enabled", k))
 			fallthrough
-		case v.Alerts.Discord.Enabled && !c.Discord.Enabled:
+		case v.Alerts.Discord.Enabled && !c.DefaultAlertConfig.Discord.Enabled:
 			problems = append(problems, fmt.Sprintf("warn: %20s is configured for discord alerts, but it is not enabled", k))
 			fallthrough
-		case v.Alerts.Pagerduty.Enabled && !c.Pagerduty.Enabled:
+		case v.Alerts.Pagerduty.Enabled && !c.DefaultAlertConfig.Pagerduty.Enabled:
 			problems = append(problems, fmt.Sprintf("warn: %20s is configured for pagerduty alerts, but it is not enabled", k))
 			fallthrough
-		case v.Alerts.Telegram.Enabled && !c.Telegram.Enabled:
+		case v.Alerts.Telegram.Enabled && !c.DefaultAlertConfig.Telegram.Enabled:
 			problems = append(problems, fmt.Sprintf("warn: %20s is configured for telegram alerts, but it is not enabled", k))
 		case !v.Alerts.ConsecutiveAlerts && !v.Alerts.PercentageAlerts && !v.Alerts.AlertIfInactive && !v.Alerts.AlertIfNoServers && !v.Alerts.ConsecutiveEmptyAlerts && !v.Alerts.EmptyPercentageAlerts:
 			problems = append(problems, fmt.Sprintf("warn: %20s has no alert types configured", k))
@@ -658,24 +647,24 @@ func loadConfig(yamlFile, stateFile, chainConfigDirectory string, password *stri
 	if saved.Alarms != nil {
 		if saved.Alarms.SentTgAlarms != nil {
 			alarms.SentTgAlarms = saved.Alarms.SentTgAlarms
-			clearStale(alarms.SentTgAlarms, "telegram", c.Pagerduty.Enabled, staleHours)
+			clearStale(alarms.SentTgAlarms, "telegram", c.DefaultAlertConfig.Pagerduty.Enabled, staleHours)
 		}
 		if saved.Alarms.SentPdAlarms != nil {
 			alarms.SentPdAlarms = saved.Alarms.SentPdAlarms
-			clearStale(alarms.SentPdAlarms, "PagerDuty", c.Pagerduty.Enabled, staleHours)
+			clearStale(alarms.SentPdAlarms, "PagerDuty", c.DefaultAlertConfig.Pagerduty.Enabled, staleHours)
 		}
 		if saved.Alarms.SentDiAlarms != nil {
 			alarms.SentDiAlarms = saved.Alarms.SentDiAlarms
-			clearStale(alarms.SentDiAlarms, "Discord", c.Pagerduty.Enabled, staleHours)
+			clearStale(alarms.SentDiAlarms, "Discord", c.DefaultAlertConfig.Pagerduty.Enabled, staleHours)
 		}
 		if saved.Alarms.SentSlkAlarms != nil {
 			alarms.SentSlkAlarms = saved.Alarms.SentSlkAlarms
-			clearStale(alarms.SentSlkAlarms, "Slack", c.Pagerduty.Enabled, staleHours)
+			clearStale(alarms.SentSlkAlarms, "Slack", c.DefaultAlertConfig.Pagerduty.Enabled, staleHours)
 		}
 		if saved.Alarms.AllAlarms != nil {
 			alarms.AllAlarms = saved.Alarms.AllAlarms
 			for _, alrm := range saved.Alarms.AllAlarms {
-				clearStale(alrm, "dashboard", c.Pagerduty.Enabled, staleHours)
+				clearStale(alrm, "dashboard", c.DefaultAlertConfig.Pagerduty.Enabled, staleHours)
 			}
 		}
 	}

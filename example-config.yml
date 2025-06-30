@@ -28,47 +28,68 @@ convert_to_fiat:
   currency: USD # or EUR, SEK, etc.
   cache_expiration: 8 # cache the pricing data for 8 hours
 
-# Global setting for pagerduty
-pagerduty:
-  # Should we use PD? Be aware that if this is set to no it overrides individual chain alerting settings.
-  enabled: no
-  # This is an API key, not oauth token, more details to follow, but check the v1 docs for more info
-  api_key: aaaaaaaaaaaabbbbbbbbbbbbbcccccccccccc
-  # Not currently used, but will be soon. This allows setting escalation priorities etc.
-  default_severity: alert
-  # Severity threshold defines the minimum severity level at which the alerts are sent to this channel
-  # In Tenderduty there are three severity levels: info, warning, and critical. `severity_threshold: critical` means that Tenderduty only sends critical alerts to this channel (Pagerduty)
-  severity_threshold: critical
 
-# Discord settings
-discord:
-  # Alert to discord?
-  enabled: no
-  # The webhook is set by right-clicking on a channel, editing the settings, and configuring a webhook in the intergrations section.
-  webhook: https://discord.com/api/webhooks/999999999999999999/zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz
-  # Severity threshold defines the minimum severity level at which the alerts are sent to this channel
-  severity_threshold: info
+# Default alert configuration used for all chains unless overridden
+default_alert_config:
+  pagerduty:
+    # Should we use PD? Be aware that if this is set to no it overrides individual chain alerting settings.
+    enabled: no
+    # This is an API key, not oauth token, more details to follow, but check the v1 docs for more info
+    api_key: aaaaaaaaaaaabbbbbbbbbbbbbcccccccccccc
+    # Not currently used, but will be soon. This allows setting escalation priorities etc.
+    default_severity: alert
+    # Severity threshold defines the minimum severity level at which the alerts are sent to this channel
+    # In Tenderduty there are three severity levels: info, warning, and critical. `severity_threshold: critical` means that Tenderduty only sends critical alerts to this channel (Pagerduty)
+    severity_threshold: critical
 
-# Telegram settings
-telegram:
-  # Alert via telegram? Note: also supersedes chain-specific settings
-  enabled: no
-  # API key ... talk to @BotFather
-  api_key: "5555555555:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
-  # The group ID for the chat where messages will be sent. Google how to find this, will include better info later.
-  channel: "-666666666"
-  # Severity threshold defines the minimum severity level at which the alerts are sent to this channel
-  severity_threshold: info
+  discord:
+    # Alert to discord?
+    enabled: no
+    # The webhook is set by right-clicking on a channel, editing the settings, and configuring a webhook in the intergrations section.
+    webhook: https://discord.com/api/webhooks/999999999999999999/zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz
+    # Severity threshold defines the minimum severity level at which the alerts are sent to this channel
+    severity_threshold: info
 
-# Slack settings
-slack:
-  # Send alerts to Slack?
-  enabled: no
-  # The webhook can be added in the Slack app directory.
-  webhook: https://hooks.slack.com/services/AAAAAAAAAAAAAAAAAAAAAAA/bbbbbbbbbbbbbbbbbbbbbbbb
-  # Severity threshold defines the minimum severity level at which the alerts are sent to this channel
-  severity_threshold: info
+  telegram:
+    # Alert via telegram? Note: also supersedes chain-specific settings
+    enabled: no
+    # API key ... talk to @BotFather
+    api_key: "5555555555:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+    # The group ID for the chat where messages will be sent. Google how to find this, will include better info later.
+    channel: "-666666666"
+    # Severity threshold defines the minimum severity level at which the alerts are sent to this channel
+    severity_threshold: info
 
+  slack:
+    # Send alerts to Slack?
+    enabled: no
+    # The webhook can be added in the Slack app directory.
+    webhook: https://hooks.slack.com/services/AAAAAAAAAAAAAAAAAAAAAAA/bbbbbbbbbbbbbbbbbbbbbbbb
+    # Severity threshold defines the minimum severity level at which the alerts are sent to this channel
+    severity_threshold: info
+  # Alert defaults shared by all chains
+  stalled_enabled: yes
+  stalled_minutes: 10
+  consecutive_enabled: yes
+  consecutive_missed: 5
+  consecutive_priority: critical
+  percentage_enabled: no
+  percentage_missed: 10
+  percentage_priority: warning
+  consecutive_empty_enabled: yes
+  consecutive_empty: 3
+  consecutive_empty_priority: critical
+  empty_percentage_enabled: yes
+  empty_percentage: 2
+  empty_percentage_priority: warning
+  alert_if_inactive: yes
+  alert_if_no_servers: yes
+  governance_alerts: yes
+  stake_change_alerts: yes
+  stake_change_drop_threshold: 0.1
+  stake_change_increase_threshold: 0.1
+  unclaimed_rewards_alerts: yes
+  unclaimed_rewards_threshold_in_fiat_currency: 10000
 # Healthcheck settings (dead man's switch)
 healthcheck:
   # Send pings to determine if the monitor is running?
