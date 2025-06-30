@@ -79,12 +79,13 @@ func getVotingPeriodProposals(httpClient *http.Client, indexers []string) ([]gov
 				}
 				if !slices.Contains(votingPeriodProposalIds, namadaProposal.ID) {
 					votingPeriodProposals = append(votingPeriodProposals, *govProposal)
+					votingPeriodProposalIds = append(votingPeriodProposalIds, namadaProposal.ID)
 				}
 			}
 		}()
 
 		// If we found proposals with this node, return them
-		if len(votingPeriodProposalIds) > 0 {
+		if len(votingPeriodProposals) > 0 {
 			return votingPeriodProposals, nil
 		}
 	}

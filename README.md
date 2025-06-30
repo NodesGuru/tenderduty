@@ -96,7 +96,7 @@ Contributions are welcome, please open pull requests against the 'develop' branc
 
 ## New features
 
-### Goverance Proposal Monitoring
+### Governance Proposal Monitoring
 
 When there are proposals in voting period and the validator has not voted on, an alert is sent to the configured channels.
 
@@ -150,7 +150,7 @@ Here is a list of all the alerts on Tenderduty.
 | ConsecutiveEmptyBlocks   | validator has proposed X consecutive empty blocks on chainY             | configured via `consecutive_empty_priority` |
 | PercentageEmptyBlocks    | validator has > X% empty blocks (Y of Z proposed blocks) on chainid ... | configured via `empty_percentage_priority`  |
 | RPCNodeDown              | RPC node X has been down for > Y minutes on chainZ                      | configured via `node_down_alert_severity`   |
-| UnvotedGoveranceProposal | There is an open proposal (#X) that the validator has not voted on      | warning                                     |
+| UnvotedGovernanceProposal | There is an open proposal (#X) that the validator has not voted on      | warning                                     |
 | StakeChange              | Validator's stake has changed by more than X% on chainY                 | warning                                     |
 
 ### Support for Namada
