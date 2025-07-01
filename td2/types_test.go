@@ -118,94 +118,94 @@ func TestApplyAlertDefaults(t *testing.T) {
 			name: "apply all defaults to empty config",
 			dst:  AlertConfig{},
 			src: AlertConfig{
-				Stalled:                          intPtr(10),
-				StalledAlerts:                    boolPtr(true),
-				ConsecutiveMissed:                intPtr(5),
-				ConsecutivePriority:              "high",
-				ConsecutiveAlerts:                boolPtr(true),
-				Window:                           intPtr(20),
-				PercentagePriority:               "medium",
-				PercentageAlerts:                 boolPtr(false),
-				ConsecutiveEmpty:                 intPtr(15),
-				ConsecutiveEmptyPriority:         "low",
-				ConsecutiveEmptyAlerts:           boolPtr(true),
-				EmptyWindow:                      intPtr(30),
-				EmptyPercentagePriority:          "critical",
-				EmptyPercentageAlerts:            boolPtr(false),
-				AlertIfInactive:                  boolPtr(true),
-				AlertIfNoServers:                 boolPtr(true),
-				GovernanceAlerts:                 boolPtr(true),
-				StakeChangeAlerts:                boolPtr(false),
-				StakeChangeDropThreshold:         floatPtr(5.0),
-				StakeChangeIncreaseThreshold:     floatPtr(10.0),
-				UnclaimedRewardsAlerts:           boolPtr(true),
-				UnclaimedRewardsThreshold:        floatPtr(100.0),
+				Stalled:                      intPtr(10),
+				StalledAlerts:                boolPtr(true),
+				ConsecutiveMissed:            intPtr(5),
+				ConsecutivePriority:          "high",
+				ConsecutiveAlerts:            boolPtr(true),
+				Window:                       intPtr(20),
+				PercentagePriority:           "medium",
+				PercentageAlerts:             boolPtr(false),
+				ConsecutiveEmpty:             intPtr(15),
+				ConsecutiveEmptyPriority:     "low",
+				ConsecutiveEmptyAlerts:       boolPtr(true),
+				EmptyWindow:                  intPtr(30),
+				EmptyPercentagePriority:      "critical",
+				EmptyPercentageAlerts:        boolPtr(false),
+				AlertIfInactive:              boolPtr(true),
+				AlertIfNoServers:             boolPtr(true),
+				GovernanceAlerts:             boolPtr(true),
+				StakeChangeAlerts:            boolPtr(false),
+				StakeChangeDropThreshold:     floatPtr(5.0),
+				StakeChangeIncreaseThreshold: floatPtr(10.0),
+				UnclaimedRewardsAlerts:       boolPtr(true),
+				UnclaimedRewardsThreshold:    floatPtr(100.0),
 			},
 			expected: AlertConfig{
-				Stalled:                          intPtr(10),
-				StalledAlerts:                    boolPtr(true),
-				ConsecutiveMissed:                intPtr(5),
-				ConsecutivePriority:              "high",
-				ConsecutiveAlerts:                boolPtr(true),
-				Window:                           intPtr(20),
-				PercentagePriority:               "medium",
-				PercentageAlerts:                 boolPtr(false),
-				ConsecutiveEmpty:                 intPtr(15),
-				ConsecutiveEmptyPriority:         "low",
-				ConsecutiveEmptyAlerts:           boolPtr(true),
-				EmptyWindow:                      intPtr(30),
-				EmptyPercentagePriority:          "critical",
-				EmptyPercentageAlerts:            boolPtr(false),
-				AlertIfInactive:                  boolPtr(true),
-				AlertIfNoServers:                 boolPtr(true),
-				GovernanceAlerts:                 boolPtr(true),
-				StakeChangeAlerts:                boolPtr(false),
-				StakeChangeDropThreshold:         floatPtr(5.0),
-				StakeChangeIncreaseThreshold:     floatPtr(10.0),
-				UnclaimedRewardsAlerts:           boolPtr(true),
-				UnclaimedRewardsThreshold:        floatPtr(100.0),
+				Stalled:                      intPtr(10),
+				StalledAlerts:                boolPtr(true),
+				ConsecutiveMissed:            intPtr(5),
+				ConsecutivePriority:          "high",
+				ConsecutiveAlerts:            boolPtr(true),
+				Window:                       intPtr(20),
+				PercentagePriority:           "medium",
+				PercentageAlerts:             boolPtr(false),
+				ConsecutiveEmpty:             intPtr(15),
+				ConsecutiveEmptyPriority:     "low",
+				ConsecutiveEmptyAlerts:       boolPtr(true),
+				EmptyWindow:                  intPtr(30),
+				EmptyPercentagePriority:      "critical",
+				EmptyPercentageAlerts:        boolPtr(false),
+				AlertIfInactive:              boolPtr(true),
+				AlertIfNoServers:             boolPtr(true),
+				GovernanceAlerts:             boolPtr(true),
+				StakeChangeAlerts:            boolPtr(false),
+				StakeChangeDropThreshold:     floatPtr(5.0),
+				StakeChangeIncreaseThreshold: floatPtr(10.0),
+				UnclaimedRewardsAlerts:       boolPtr(true),
+				UnclaimedRewardsThreshold:    floatPtr(100.0),
 			},
 		},
 		{
 			name: "preserve existing values, only fill zeros",
 			dst: AlertConfig{
-				Stalled:                          intPtr(25),
-				StalledAlerts:                    boolPtr(false),
-				ConsecutiveMissed:                intPtr(8),
-				ConsecutivePriority:              "critical",
-				Window:                           intPtr(50),
-				PercentagePriority:               "high",
-				StakeChangeDropThreshold:         floatPtr(15.0),
+				Stalled:                  intPtr(25),
+				StalledAlerts:            boolPtr(false),
+				ConsecutiveMissed:        intPtr(8),
+				ConsecutivePriority:      "critical",
+				Window:                   intPtr(50),
+				PercentagePriority:       "high",
+				StakeChangeDropThreshold: floatPtr(15.0),
 			},
 			src: AlertConfig{
-				Stalled:                          intPtr(10),
-				StalledAlerts:                    boolPtr(true),
-				ConsecutiveMissed:                intPtr(5),
-				ConsecutivePriority:              "medium",
-				ConsecutiveAlerts:                boolPtr(true),
-				Window:                           intPtr(20),
-				PercentagePriority:               "low",
-				PercentageAlerts:                 boolPtr(false),
-				ConsecutiveEmpty:                 intPtr(15),
-				ConsecutiveEmptyPriority:         "low",
-				ConsecutiveEmptyAlerts:           boolPtr(true),
-				AlertIfInactive:                  boolPtr(true),
-				StakeChangeDropThreshold:         floatPtr(5.0),
+				Stalled:                  intPtr(10),
+				StalledAlerts:            boolPtr(true),
+				ConsecutiveMissed:        intPtr(5),
+				ConsecutivePriority:      "medium",
+				ConsecutiveAlerts:        boolPtr(true),
+				Window:                   intPtr(20),
+				PercentagePriority:       "low",
+				PercentageAlerts:         boolPtr(false),
+				ConsecutiveEmpty:         intPtr(15),
+				ConsecutiveEmptyPriority: "low",
+				ConsecutiveEmptyAlerts:   boolPtr(true),
+				AlertIfInactive:          boolPtr(true),
+				StakeChangeDropThreshold: floatPtr(5.0),
 			},
 			expected: AlertConfig{
-				Stalled:                          intPtr(25), // preserved
-				StalledAlerts:                    boolPtr(false), // preserved
-				ConsecutiveMissed:                intPtr(8), // preserved
-				ConsecutivePriority:              "critical", // preserved
-				ConsecutiveAlerts:                boolPtr(true), // filled from src
-				Window:                           intPtr(50), // preserved
-				PercentagePriority:               "high", // preserved
-				PercentageAlerts:                 boolPtr(false), // filled from src
-				ConsecutiveEmpty:                 intPtr(15), // filled from src
-				ConsecutiveEmptyPriority:         "low", // filled from src
-				ConsecutiveEmptyAlerts:           boolPtr(true), // filled from src
-				AlertIfInactive:                  boolPtr(true), // filled from src
-				StakeChangeDropThreshold:         floatPtr(15.0), // preserved
+				Stalled:                  intPtr(25),     // preserved
+				StalledAlerts:            boolPtr(false), // preserved
+				ConsecutiveMissed:        intPtr(8),      // preserved
+				ConsecutivePriority:      "critical",     // preserved
+				ConsecutiveAlerts:        boolPtr(true),  // filled from src
+				Window:                   intPtr(50),     // preserved
+				PercentagePriority:       "high",         // preserved
+				PercentageAlerts:         boolPtr(false), // filled from src
+				ConsecutiveEmpty:         intPtr(15),     // filled from src
+				ConsecutiveEmptyPriority: "low",          // filled from src
+				ConsecutiveEmptyAlerts:   boolPtr(true),  // filled from src
+				AlertIfInactive:          boolPtr(true),  // filled from src
+				StakeChangeDropThreshold: floatPtr(15.0), // preserved
 			},
 		},
 		{
@@ -250,23 +250,23 @@ func TestApplyAlertDefaults(t *testing.T) {
 				Pagerduty: PDConfig{
 					Enabled:           boolPtr(false), // preserved
 					ApiKey:            "existing-key", // preserved
-					DefaultSeverity:   "warning", // filled from src
-					SeverityThreshold: "info", // filled from src
+					DefaultSeverity:   "warning",      // filled from src
+					SeverityThreshold: "info",         // filled from src
 				},
 			},
 		},
 		{
 			name: "pointer field handling - nil vs non-nil",
 			dst: AlertConfig{
-				Stalled: nil, // nil pointer should be filled
+				Stalled:       nil,           // nil pointer should be filled
 				StalledAlerts: boolPtr(true), // non-nil should be preserved
 			},
 			src: AlertConfig{
-				Stalled: intPtr(10),
+				Stalled:       intPtr(10),
 				StalledAlerts: boolPtr(false),
 			},
 			expected: AlertConfig{
-				Stalled: intPtr(10), // should be filled from src (was nil)
+				Stalled:       intPtr(10),    // should be filled from src (was nil)
 				StalledAlerts: boolPtr(true), // should be preserved (was non-nil)
 			},
 		},
@@ -277,7 +277,7 @@ func TestApplyAlertDefaults(t *testing.T) {
 			// Make a copy of dst to avoid modifying the test case
 			dst := tt.dst
 			applyAlertDefaults(&dst, &tt.src)
-			
+
 			if !alertConfigsEqual(dst, tt.expected) {
 				t.Errorf("applyAlertDefaults() mismatch")
 				t.Logf("Stalled - Got: %v, Expected: %v", ptrIntToString(dst.Stalled), ptrIntToString(tt.expected.Stalled))
@@ -290,7 +290,7 @@ func TestApplyAlertDefaults(t *testing.T) {
 func TestIsZero(t *testing.T) {
 	tests := []struct {
 		name     string
-		value    interface{}
+		value    any
 		expected bool
 	}{
 		{"zero int", 0, true},
@@ -354,21 +354,21 @@ func TestApplyAlertDefaultsWithComplexNesting(t *testing.T) {
 		Pagerduty: PDConfig{
 			Enabled:           boolPtr(true), // preserved from dst
 			ApiKey:            "default-key", // filled from src
-			DefaultSeverity:   "warning", // filled from src
-			SeverityThreshold: "info", // filled from src
+			DefaultSeverity:   "warning",     // filled from src
+			SeverityThreshold: "info",        // filled from src
 		},
 		Discord: DiscordConfig{
-			Enabled:           boolPtr(true), // filled from src
+			Enabled:           boolPtr(true),      // filled from src
 			Webhook:           "existing-webhook", // preserved from dst
-			Mentions:          []string{"@here"}, // filled from src
-			SeverityThreshold: "critical", // filled from src
+			Mentions:          []string{"@here"},  // filled from src
+			SeverityThreshold: "critical",         // filled from src
 		},
 		Telegram: TeleConfig{
-			Enabled:           boolPtr(true), // filled from src
-			ApiKey:            "telegram-key", // filled from src
-			Channel:           "alerts", // filled from src
+			Enabled:           boolPtr(true),      // filled from src
+			ApiKey:            "telegram-key",     // filled from src
+			Channel:           "alerts",           // filled from src
 			Mentions:          []string{"@admin"}, // filled from src
-			SeverityThreshold: "warning", // filled from src
+			SeverityThreshold: "warning",          // filled from src
 		},
 	}
 
@@ -382,21 +382,21 @@ func TestApplyAlertDefaultsWithComplexNesting(t *testing.T) {
 func TestApplyAlertDefaultsWithPointerFields(t *testing.T) {
 	// Test pointer field handling specifically
 	dst := AlertConfig{
-		Stalled:          nil, // nil pointer should be filled
-		StalledAlerts:    boolPtr(false), // non-nil pointer should be preserved
-		ConsecutiveMissed: intPtr(0), // non-nil pointer should be preserved even if zero
+		Stalled:           nil,            // nil pointer should be filled
+		StalledAlerts:     boolPtr(false), // non-nil pointer should be preserved
+		ConsecutiveMissed: intPtr(0),      // non-nil pointer should be preserved even if zero
 	}
 
 	src := AlertConfig{
-		Stalled:          intPtr(30),
-		StalledAlerts:    boolPtr(true),
+		Stalled:           intPtr(30),
+		StalledAlerts:     boolPtr(true),
 		ConsecutiveMissed: intPtr(10),
 	}
 
 	expected := AlertConfig{
-		Stalled:          intPtr(30), // filled from src (was nil)
-		StalledAlerts:    boolPtr(false), // preserved from dst (non-nil)
-		ConsecutiveMissed: intPtr(0), // preserved from dst (non-nil, even though zero)
+		Stalled:           intPtr(30),     // filled from src (was nil)
+		StalledAlerts:     boolPtr(false), // preserved from dst (non-nil)
+		ConsecutiveMissed: intPtr(0),      // preserved from dst (non-nil, even though zero)
 	}
 
 	applyAlertDefaults(&dst, &src)
@@ -499,3 +499,4 @@ func TestFloatVal(t *testing.T) {
 		})
 	}
 }
+

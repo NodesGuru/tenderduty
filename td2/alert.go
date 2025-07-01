@@ -426,10 +426,6 @@ func (c *Config) alert(chainName, message, severity string, resolved bool, id *s
 // and also updates a few prometheus stats
 // FIXME: not watching for nodes that are lagging the head block!
 func (cc *ChainConfig) watch() {
-	// print `cc` as a json string here, useful for debugging
-	jsonBytes, _ := json.MarshalIndent(td, "", "  ")
-	l("Tenderduty config:", string(jsonBytes))
-
 	var missedAlarm, pctAlarm, noNodes, emptyBlocksAlarm, emptyPctAlarm, stakeChangeAlarm, unclaimedRewardsAlarm bool
 	inactive := "jailed"
 	nodeAlarms := make(map[string]bool)
