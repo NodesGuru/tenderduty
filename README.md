@@ -10,6 +10,7 @@ This is a fork of the original [Tenderduty](https://github.com/blockpane/tenderd
    - Voting power is now reported in the dashboard, and alerts are fired upon changes above a configurable threshold.
    - Staking APR is now reported in the dashboard.
 - **[Configurable severity threshold per channel.](#channel-severity-thresholds)** Configure different minimum notification levels for each channel (e.g. "critical" for Pagerduty, "info" and above for Telegram).
+- **Global default alert configuration.** Define alert settings once in `default_alert_config` and override them per chain when needed.
 - **[Improved support for Namada.](#support-for-namada)** Proper reporting of otherwise missing information such as the Moniker, uptime data or slashing threshold.
 - **[Pre-built binaries.](#pre-built-binaries)** Releases now include pre-built binaries for Linux and MacOS.
 - **[Design improvements.](#design-improvements)** Restyled dashboard design.

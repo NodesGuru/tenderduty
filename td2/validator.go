@@ -267,7 +267,7 @@ func (cc *ChainConfig) GetValInfo(first bool) (err error) {
 	}
 
 	// Log if governance alerts are disabled (only on first run)
-	if first && !cc.Alerts.GovernanceAlerts {
+	if first && !boolVal(cc.Alerts.GovernanceAlerts) {
 		l(fmt.Sprintf("ℹ️ Governance alerts disabled for %s (%s)", cc.ValAddress, cc.valInfo.Moniker))
 	}
 

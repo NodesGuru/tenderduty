@@ -73,7 +73,7 @@ func (a *alarmCache) clearNoBlocks(cc *ChainConfig) {
 		if strings.HasPrefix(clearAlarm, "stalled: have not seen a new block on") {
 			td.alert(
 				cc.name,
-				fmt.Sprintf("stalled: have not seen a new block on %s in %d minutes", cc.ChainId, cc.Alerts.Stalled),
+				fmt.Sprintf("stalled: have not seen a new block on %s in %d minutes", cc.ChainId, intVal(cc.Alerts.Stalled)),
 				"critical",
 				true,
 				&cc.valInfo.Valcons,
@@ -388,10 +388,10 @@ func (c *Config) alert(chainName, message, severity string, resolved bool, id *s
 	}
 	c.chainsMux.RLock()
 	a := &alertMsg{
-		pd:           c.Pagerduty.Enabled && c.Chains[chainName].Alerts.Pagerduty.Enabled,
-		disc:         c.Discord.Enabled && c.Chains[chainName].Alerts.Discord.Enabled,
-		tg:           c.Telegram.Enabled && c.Chains[chainName].Alerts.Telegram.Enabled,
-		slk:          c.Slack.Enabled && c.Chains[chainName].Alerts.Slack.Enabled,
+		pd:           boolVal(c.DefaultAlertConfig.Pagerduty.Enabled) && boolVal(c.Chains[chainName].Alerts.Pagerduty.Enabled),
+		disc:         boolVal(c.DefaultAlertConfig.Discord.Enabled) && boolVal(c.Chains[chainName].Alerts.Discord.Enabled),
+		tg:           boolVal(c.DefaultAlertConfig.Telegram.Enabled) && boolVal(c.Chains[chainName].Alerts.Telegram.Enabled),
+		slk:          boolVal(c.DefaultAlertConfig.Slack.Enabled) && boolVal(c.Chains[chainName].Alerts.Slack.Enabled),
 		severity:     severity,
 		resolved:     resolved,
 		chain:        fmt.Sprintf("%s (%s)", chainName, c.Chains[chainName].ChainId),
@@ -435,7 +435,7 @@ func (cc *ChainConfig) watch() {
 	for {
 		if cc.valInfo == nil || cc.valInfo.Moniker == "not connected" {
 			time.Sleep(time.Second)
-			if cc.Alerts.AlertIfNoServers && !noNodes && cc.noNodes && noNodesSec >= 60*td.NodeDownMin {
+			if boolVal(cc.Alerts.AlertIfNoServers) && !noNodes && cc.noNodes && noNodesSec >= 60*td.NodeDownMin {
 				noNodes = true
 				td.alert(
 					cc.name,
@@ -463,7 +463,7 @@ func (cc *ChainConfig) watch() {
 
 		// alert if we can't monitor
 		switch {
-		case cc.Alerts.AlertIfNoServers && !noNodes && cc.noNodes:
+		case boolVal(cc.Alerts.AlertIfNoServers) && !noNodes && cc.noNodes:
 			noNodesSec += 2
 			if noNodesSec <= 30*td.NodeDownMin {
 				if noNodesSec%20 == 0 {
@@ -481,7 +481,7 @@ func (cc *ChainConfig) watch() {
 					&cc.valInfo.Valcons,
 				)
 			}
-		case cc.Alerts.AlertIfNoServers && noNodes && !cc.noNodes:
+		case boolVal(cc.Alerts.AlertIfNoServers) && noNodes && !cc.noNodes:
 			noNodes = false
 			td.alert(
 				cc.name,
@@ -495,18 +495,18 @@ func (cc *ChainConfig) watch() {
 		}
 
 		// stalled chain detection
-		if cc.Alerts.StalledAlerts && !cc.lastBlockTime.IsZero() {
-			if !cc.lastBlockAlarm && cc.lastBlockTime.Before(time.Now().Add(time.Duration(-cc.Alerts.Stalled)*time.Minute)) {
+		if boolVal(cc.Alerts.StalledAlerts) && !cc.lastBlockTime.IsZero() {
+			if !cc.lastBlockAlarm && cc.lastBlockTime.Before(time.Now().Add(time.Duration(-intVal(cc.Alerts.Stalled))*time.Minute)) {
 				// chain is stalled send an alert!
 				cc.lastBlockAlarm = true
 				td.alert(
 					cc.name,
-					fmt.Sprintf("stalled: have not seen a new block on %s in %d minutes", cc.ChainId, cc.Alerts.Stalled),
+					fmt.Sprintf("stalled: have not seen a new block on %s in %d minutes", cc.ChainId, intVal(cc.Alerts.Stalled)),
 					"critical",
 					false,
 					&cc.valInfo.Valcons,
 				)
-			} else if !cc.lastBlockTime.Before(time.Now().Add(time.Duration(-cc.Alerts.Stalled) * time.Minute)) {
+			} else if !cc.lastBlockTime.Before(time.Now().Add(time.Duration(-intVal(cc.Alerts.Stalled)) * time.Minute)) {
 				alarms.clearNoBlocks(cc)
 				cc.lastBlockAlarm = false
 				cc.activeAlerts = alarms.getCount(cc.name)
@@ -514,7 +514,7 @@ func (cc *ChainConfig) watch() {
 		}
 
 		// jailed detection - only alert if it changes.
-		if cc.Alerts.AlertIfInactive && cc.lastValInfo != nil && cc.lastValInfo.Bonded != cc.valInfo.Bonded &&
+		if boolVal(cc.Alerts.AlertIfInactive) && cc.lastValInfo != nil && cc.lastValInfo.Bonded != cc.valInfo.Bonded &&
 			cc.lastValInfo.Moniker == cc.valInfo.Moniker {
 
 			id := cc.valInfo.Valcons + "jailed"
@@ -543,25 +543,25 @@ func (cc *ChainConfig) watch() {
 		}
 
 		// consecutive missed block alarms:
-		if !missedAlarm && cc.Alerts.ConsecutiveAlerts && int(cc.statConsecutiveMiss) >= cc.Alerts.ConsecutiveMissed {
+		if !missedAlarm && boolVal(cc.Alerts.ConsecutiveAlerts) && int(cc.statConsecutiveMiss) >= intVal(cc.Alerts.ConsecutiveMissed) {
 			// alert on missed block counter!
 			missedAlarm = true
 			id := cc.valInfo.Valcons + "consecutive"
 			td.alert(
 				cc.name,
-				fmt.Sprintf("%s has missed %d blocks on %s", cc.valInfo.Moniker, cc.Alerts.ConsecutiveMissed, cc.ChainId),
+				fmt.Sprintf("%s has missed %d blocks on %s", cc.valInfo.Moniker, intVal(cc.Alerts.ConsecutiveMissed), cc.ChainId),
 				cc.Alerts.ConsecutivePriority,
 				false,
 				&id,
 			)
 			cc.activeAlerts = alarms.getCount(cc.name)
-		} else if missedAlarm && int(cc.statConsecutiveMiss) < cc.Alerts.ConsecutiveMissed {
+		} else if missedAlarm && int(cc.statConsecutiveMiss) < intVal(cc.Alerts.ConsecutiveMissed) {
 			// clear the alert
 			missedAlarm = false
 			id := cc.valInfo.Valcons + "consecutive"
 			td.alert(
 				cc.name,
-				fmt.Sprintf("%s has missed %d blocks on %s", cc.valInfo.Moniker, cc.Alerts.ConsecutiveMissed, cc.ChainId),
+				fmt.Sprintf("%s has missed %d blocks on %s", cc.valInfo.Moniker, intVal(cc.Alerts.ConsecutiveMissed), cc.ChainId),
 				cc.Alerts.ConsecutivePriority,
 				true,
 				&id,
@@ -570,25 +570,25 @@ func (cc *ChainConfig) watch() {
 		}
 
 		// window percentage missed block alarms
-		if cc.Alerts.PercentageAlerts && !pctAlarm && 100*float64(cc.valInfo.Missed)/float64(cc.valInfo.Window) > float64(cc.Alerts.Window) {
+		if boolVal(cc.Alerts.PercentageAlerts) && !pctAlarm && 100*float64(cc.valInfo.Missed)/float64(cc.valInfo.Window) > float64(intVal(cc.Alerts.Window)) {
 			// alert on missed block counter!
 			pctAlarm = true
 			id := cc.valInfo.Valcons + "percent"
 			td.alert(
 				cc.name,
-				fmt.Sprintf("%s has missed > %d%% of the slashing window's blocks on %s", cc.valInfo.Moniker, cc.Alerts.Window, cc.ChainId),
+				fmt.Sprintf("%s has missed > %d%% of the slashing window's blocks on %s", cc.valInfo.Moniker, intVal(cc.Alerts.Window), cc.ChainId),
 				cc.Alerts.PercentagePriority,
 				false,
 				&id,
 			)
 			cc.activeAlerts = alarms.getCount(cc.name)
-		} else if cc.Alerts.PercentageAlerts && pctAlarm && 100*float64(cc.valInfo.Missed)/float64(cc.valInfo.Window) < float64(cc.Alerts.Window) {
+		} else if boolVal(cc.Alerts.PercentageAlerts) && pctAlarm && 100*float64(cc.valInfo.Missed)/float64(cc.valInfo.Window) < float64(intVal(cc.Alerts.Window)) {
 			// clear the alert
 			pctAlarm = false
 			id := cc.valInfo.Valcons + "percent"
 			td.alert(
 				cc.name,
-				fmt.Sprintf("%s has missed > %d%% of the slashing window's blocks on %s", cc.valInfo.Moniker, cc.Alerts.Window, cc.ChainId),
+				fmt.Sprintf("%s has missed > %d%% of the slashing window's blocks on %s", cc.valInfo.Moniker, intVal(cc.Alerts.Window), cc.ChainId),
 				cc.Alerts.PercentagePriority,
 				true,
 				&id,
@@ -597,25 +597,25 @@ func (cc *ChainConfig) watch() {
 		}
 
 		// empty blocks alarm handling
-		if !emptyBlocksAlarm && cc.Alerts.ConsecutiveEmptyAlerts && int(cc.statConsecutiveEmpty) >= cc.Alerts.ConsecutiveEmpty {
+		if !emptyBlocksAlarm && boolVal(cc.Alerts.ConsecutiveEmptyAlerts) && int(cc.statConsecutiveEmpty) >= intVal(cc.Alerts.ConsecutiveEmpty) {
 			// alert on empty blocks counter!
 			emptyBlocksAlarm = true
 			id := cc.valInfo.Valcons + "empty"
 			td.alert(
 				cc.name,
-				fmt.Sprintf("%s has proposed %d consecutive empty blocks on %s", cc.valInfo.Moniker, cc.Alerts.ConsecutiveEmpty, cc.ChainId),
+				fmt.Sprintf("%s has proposed %d consecutive empty blocks on %s", cc.valInfo.Moniker, intVal(cc.Alerts.ConsecutiveEmpty), cc.ChainId),
 				cc.Alerts.ConsecutiveEmptyPriority,
 				false,
 				&id,
 			)
 			cc.activeAlerts = alarms.getCount(cc.name)
-		} else if emptyBlocksAlarm && int(cc.statConsecutiveEmpty) < cc.Alerts.ConsecutiveEmpty {
+		} else if emptyBlocksAlarm && int(cc.statConsecutiveEmpty) < intVal(cc.Alerts.ConsecutiveEmpty) {
 			// clear the alert
 			emptyBlocksAlarm = false
 			id := cc.valInfo.Valcons + "empty"
 			td.alert(
 				cc.name,
-				fmt.Sprintf("%s has proposed %d consecutive empty blocks on %s", cc.valInfo.Moniker, cc.Alerts.ConsecutiveEmpty, cc.ChainId),
+				fmt.Sprintf("%s has proposed %d consecutive empty blocks on %s", cc.valInfo.Moniker, intVal(cc.Alerts.ConsecutiveEmpty), cc.ChainId),
 				cc.Alerts.ConsecutiveEmptyPriority,
 				true,
 				&id,
@@ -629,7 +629,7 @@ func (cc *ChainConfig) watch() {
 			emptyBlocksPercent = 100 * float64(cc.statTotalPropsEmpty) / float64(cc.statTotalProps)
 		}
 
-		if cc.Alerts.EmptyPercentageAlerts && !emptyPctAlarm && emptyBlocksPercent > float64(cc.Alerts.EmptyWindow) {
+		if boolVal(cc.Alerts.EmptyPercentageAlerts) && !emptyPctAlarm && emptyBlocksPercent > float64(intVal(cc.Alerts.EmptyWindow)) {
 			// alert on empty block percentage!
 			emptyPctAlarm = true
 			id := cc.valInfo.Valcons + "empty_percent"
@@ -637,7 +637,7 @@ func (cc *ChainConfig) watch() {
 				cc.name,
 				fmt.Sprintf("%s has > %d%% empty blocks (%d of %d proposed blocks) on %s",
 					cc.valInfo.Moniker,
-					cc.Alerts.EmptyWindow,
+					intVal(cc.Alerts.EmptyWindow),
 					int(cc.statTotalPropsEmpty),
 					int(cc.statTotalProps),
 					cc.ChainId),
@@ -646,7 +646,7 @@ func (cc *ChainConfig) watch() {
 				&id,
 			)
 			cc.activeAlerts = alarms.getCount(cc.name)
-		} else if cc.Alerts.EmptyPercentageAlerts && emptyPctAlarm && emptyBlocksPercent < float64(cc.Alerts.EmptyWindow) {
+		} else if boolVal(cc.Alerts.EmptyPercentageAlerts) && emptyPctAlarm && emptyBlocksPercent < float64(intVal(cc.Alerts.EmptyWindow)) {
 			// clear the alert
 			emptyPctAlarm = false
 			id := cc.valInfo.Valcons + "empty_percent"
@@ -654,7 +654,7 @@ func (cc *ChainConfig) watch() {
 				cc.name,
 				fmt.Sprintf("%s has > %d%% empty blocks (%d of %d proposed blocks) on %s",
 					cc.valInfo.Moniker,
-					cc.Alerts.EmptyWindow,
+					intVal(cc.Alerts.EmptyWindow),
 					int(cc.statTotalPropsEmpty),
 					int(cc.statTotalProps),
 					cc.ChainId),
@@ -700,13 +700,13 @@ func (cc *ChainConfig) watch() {
 		}
 
 		// validator stake change alerts
-		if cc.Alerts.StakeChangeAlerts && cc.valInfo != nil && cc.lastValInfo != nil {
+		if boolVal(cc.Alerts.StakeChangeAlerts) && cc.valInfo != nil && cc.lastValInfo != nil {
 			stakeChangePercent := (cc.valInfo.DelegatedTokens - cc.lastValInfo.DelegatedTokens) / cc.lastValInfo.DelegatedTokens
 			trend := "increased"
-			threshold := cc.Alerts.StakeChangeIncreaseThreshold
+			threshold := floatVal(cc.Alerts.StakeChangeIncreaseThreshold)
 			if stakeChangePercent < 0 {
 				trend = "dropped"
-				threshold = cc.Alerts.StakeChangeDropThreshold
+				threshold = floatVal(cc.Alerts.StakeChangeDropThreshold)
 			}
 			id := cc.valInfo.Valcons + "_stake_change"
 			severity := "warning"
@@ -724,7 +724,7 @@ func (cc *ChainConfig) watch() {
 		}
 
 		// validator unclaimed rewards alert
-		if cc.Alerts.UnclaimedRewardsAlerts && td.PriceConversion.Enabled && cc.valInfo.SelfDelegationRewards != nil && cc.valInfo.Commission != nil {
+		if boolVal(cc.Alerts.UnclaimedRewardsAlerts) && td.PriceConversion.Enabled && cc.valInfo.SelfDelegationRewards != nil && cc.valInfo.Commission != nil {
 			totalRewards := github_com_cosmos_cosmos_sdk_types.DecCoin{
 				Denom:  (*cc.valInfo.SelfDelegationRewards)[0].Denom,
 				Amount: github_com_cosmos_cosmos_sdk_types.ZeroDec(),
@@ -736,8 +736,8 @@ func (cc *ChainConfig) watch() {
 				totalRewardsConverted := totalRewards.Amount.MustFloat64() * coinPrice.Price
 				id := cc.valInfo.Valcons + "_unclaimed_rewards"
 				severity := "warning"
-				message := fmt.Sprintf("%s has more than %.0f %s unclaimed rewards on %s", cc.valInfo.Moniker, cc.Alerts.UnclaimedRewardsThreshold, td.PriceConversion.Currency, cc.name)
-				if totalRewardsConverted > cc.Alerts.UnclaimedRewardsThreshold {
+				message := fmt.Sprintf("%s has more than %.0f %s unclaimed rewards on %s", cc.valInfo.Moniker, floatVal(cc.Alerts.UnclaimedRewardsThreshold), td.PriceConversion.Currency, cc.name)
+				if totalRewardsConverted > floatVal(cc.Alerts.UnclaimedRewardsThreshold) {
 					td.alert(cc.name, message, severity, false, &id)
 					unclaimedRewardsAlarm = true
 				} else {
@@ -761,7 +761,7 @@ func (cc *ChainConfig) watch() {
 		}
 
 		// Only send governance alerts if they're enabled
-		if cc.Alerts.GovernanceAlerts {
+		if boolVal(cc.Alerts.GovernanceAlerts) {
 			for _, proposal := range cc.unvotedOpenGovProposals {
 				id := fmt.Sprintf(idTemplate, cc.valInfo.Valcons, proposal.ProposalId)
 				deadline := fmt.Sprintf(", deadline: %s UTC", proposal.VotingEndTime.Format("2006-01-02 15:04"))

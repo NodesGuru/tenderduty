@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"reflect"
 	"regexp"
 	"slices"
 	"strings"
@@ -51,6 +52,59 @@ func SeverityThresholdToSeverities(threhold string) []string {
 	return severities
 }
 
+// applyAlertDefaults copies zero-value fields from src to dst recursively.
+func applyAlertDefaults(dst, src any) {
+	dv := reflect.ValueOf(dst).Elem()
+	sv := reflect.ValueOf(src).Elem()
+	for i := 0; i < dv.NumField(); i++ {
+		df := dv.Field(i)
+		sf := sv.Field(i)
+		if !df.CanSet() {
+			continue
+		}
+
+		switch df.Kind() {
+		case reflect.Struct:
+			applyAlertDefaults(df.Addr().Interface(), sf.Addr().Interface())
+		case reflect.Pointer:
+			if df.IsNil() {
+				df.Set(sf)
+			} else if df.Elem().Kind() == reflect.Struct && !sf.IsNil() {
+				applyAlertDefaults(df.Interface(), sf.Interface())
+			}
+		default:
+			if isZero(df) {
+				df.Set(sf)
+			}
+		}
+	}
+}
+
+func isZero(v reflect.Value) bool {
+	return reflect.DeepEqual(v.Interface(), reflect.Zero(v.Type()).Interface())
+}
+
+func boolVal(v *bool) bool {
+	if v == nil {
+		return false
+	}
+	return *v
+}
+
+func intVal(v *int) int {
+	if v == nil {
+		return 0
+	}
+	return *v
+}
+
+func floatVal(v *float64) float64 {
+	if v == nil {
+		return 0
+	}
+	return *v
+}
+
 // Config holds both the settings for tenderduty to monitor and state information while running.
 type Config struct {
 	alertChan           chan *alertMsg // channel used for outgoing notifications
@@ -85,14 +139,9 @@ type Config struct {
 	// PrometheusListenPort is the port number used by the prometheus web server
 	PrometheusListenPort int `yaml:"prometheus_listen_port"`
 
-	// Pagerduty configuration values
-	Pagerduty PDConfig `yaml:"pagerduty"`
-	// Discord webhook information
-	Discord DiscordConfig `yaml:"discord"`
-	// Telegram api information
-	Telegram TeleConfig `yaml:"telegram"`
-	// Slack webhook information
-	Slack SlackConfig `yaml:"slack"`
+	// DefaultAlertConfig defines the default alert settings which can be
+	// overridden on a per chain basis in the `alerts` section.
+	DefaultAlertConfig AlertConfig `yaml:"default_alert_config"`
 	// Healthcheck information
 	Healthcheck HealthcheckConfig `yaml:"healthcheck"`
 
@@ -198,64 +247,54 @@ func (cc *ChainConfig) mkUpdate(t metricType, v float64, node string) *promUpdat
 // AlertConfig defines the type of alerts to send for a ChainConfig
 type AlertConfig struct {
 	// How many minutes to wait before alerting that no new blocks have been seen
-	Stalled int `yaml:"stalled_minutes"`
+	Stalled *int `yaml:"stalled_minutes"`
 	// Whether to alert when no new blocks are seen
-	StalledAlerts bool `yaml:"stalled_enabled"`
+	StalledAlerts *bool `yaml:"stalled_enabled"`
 
 	// How many missed blocks are acceptable before alerting
-	ConsecutiveMissed int `yaml:"consecutive_missed"`
+	ConsecutiveMissed *int `yaml:"consecutive_missed"`
 	// Tag for pagerduty to set the alert priority
 	ConsecutivePriority string `yaml:"consecutive_priority"`
 	// Whether to alert on consecutive missed blocks
-	ConsecutiveAlerts bool `yaml:"consecutive_enabled"`
+	ConsecutiveAlerts *bool `yaml:"consecutive_enabled"`
 
 	// Window is how many blocks missed as a percentage of the slashing window to trigger an alert
-	Window int `yaml:"percentage_missed"`
+	Window *int `yaml:"percentage_missed"`
 	// PercentagePriority is a tag for pagerduty to route on priority
 	PercentagePriority string `yaml:"percentage_priority"`
 	// PercentageAlerts is whether to alert on percentage based misses
-	PercentageAlerts bool `yaml:"percentage_enabled"`
+	PercentageAlerts *bool `yaml:"percentage_enabled"`
 
 	// How many consecutive empty blocks are acceptable before alerting
-	ConsecutiveEmpty int `yaml:"consecutive_empty"`
+	ConsecutiveEmpty *int `yaml:"consecutive_empty"`
 	// Tag for pagerduty to set the alert priority for empty blocks
 	ConsecutiveEmptyPriority string `yaml:"consecutive_empty_priority"`
 	// Whether to alert on consecutive empty blocks
-	ConsecutiveEmptyAlerts bool `yaml:"consecutive_empty_enabled"`
+	ConsecutiveEmptyAlerts *bool `yaml:"consecutive_empty_enabled"`
 
 	// EmptyWindow is how many blocks empty as a percentage of proposed blocks since tenderduty was started to trigger an alert
-	EmptyWindow int `yaml:"empty_percentage"`
+	EmptyWindow *int `yaml:"empty_percentage"`
 	// EmptyPercentagePriority is a tag for pagerduty to route on priority
 	EmptyPercentagePriority string `yaml:"empty_percentage_priority"`
 	// EmptyPercentageAlerts is whether to alert on percentage based empty blocks
-	EmptyPercentageAlerts bool `yaml:"empty_percentage_enabled"`
+	EmptyPercentageAlerts *bool `yaml:"empty_percentage_enabled"`
 
 	// AlertIfInactive decides if tenderduty send an alert if the validator is not in the active set?
-	AlertIfInactive bool `yaml:"alert_if_inactive"`
+	AlertIfInactive *bool `yaml:"alert_if_inactive"`
 	// AlertIfNoServers: should an alert be sent if no servers are reachable?
-	AlertIfNoServers bool `yaml:"alert_if_no_servers"`
+	AlertIfNoServers *bool `yaml:"alert_if_no_servers"`
 
 	// Whether to alert on unvoted governance proposals
-	GovernanceAlerts bool `yaml:"governance_alerts"`
+	GovernanceAlerts *bool `yaml:"governance_alerts"`
 
 	// Whether to alert when a validator's stake change goes beyond the threshold
-	StakeChangeAlerts            bool    `yaml:"stake_change_alerts"`
-	StakeChangeDropThreshold     float64 `yaml:"stake_change_drop_threshold"`
-	StakeChangeIncreaseThreshold float64 `yaml:"stake_change_increase_threshold"`
+	StakeChangeAlerts            *bool    `yaml:"stake_change_alerts"`
+	StakeChangeDropThreshold     *float64 `yaml:"stake_change_drop_threshold"`
+	StakeChangeIncreaseThreshold *float64 `yaml:"stake_change_increase_threshold"`
 
 	// Whether to alert when a validator has more than the threhold value of unclaimed rewards
-	UnclaimedRewardsAlerts    bool    `yaml:"unclaimed_rewards_alerts"`
-	UnclaimedRewardsThreshold float64 `yaml:"unclaimed_rewards_threshold_in_fiat_currency"`
-
-	// PagerdutyAlerts: Should pagerduty alerts be sent for this chain? Both 'config.pagerduty.enabled: yes' and this must be set.
-	// Deprecated: use Pagerduty.Enabled instead
-	PagerdutyAlerts bool `yaml:"pagerduty_alerts"`
-	// DiscordAlerts: Should discord alerts be sent for this chain? Both 'config.discord.enabled: yes' and this must be set.
-	// Deprecated: use Discord.Enabled instead
-	DiscordAlerts bool `yaml:"discord_alerts"`
-	// TelegramAlerts: Should telegram alerts be sent for this chain? Both 'config.telegram.enabled: yes' and this must be set.
-	// Deprecated: use Telegram.Enabled instead
-	TelegramAlerts bool `yaml:"telegram_alerts"`
+	UnclaimedRewardsAlerts    *bool    `yaml:"unclaimed_rewards_alerts"`
+	UnclaimedRewardsThreshold *float64 `yaml:"unclaimed_rewards_threshold_in_fiat_currency"`
 
 	// chain specific overrides for alert destinations.
 	// Pagerduty configuration values
@@ -282,7 +321,7 @@ type NodeConfig struct {
 
 // PDConfig is the information required to send alerts to PagerDuty
 type PDConfig struct {
-	Enabled           bool   `yaml:"enabled"`
+	Enabled           *bool  `yaml:"enabled"`
 	ApiKey            string `yaml:"api_key"`
 	DefaultSeverity   string `yaml:"default_severity"`
 	SeverityThreshold string `yaml:"severity_threshold"`
@@ -290,7 +329,7 @@ type PDConfig struct {
 
 // DiscordConfig holds the information needed to publish to a Discord webhook for sending alerts
 type DiscordConfig struct {
-	Enabled           bool     `yaml:"enabled"`
+	Enabled           *bool    `yaml:"enabled"`
 	Webhook           string   `yaml:"webhook"`
 	Mentions          []string `yaml:"mentions"`
 	SeverityThreshold string   `yaml:"severity_threshold"`
@@ -298,7 +337,7 @@ type DiscordConfig struct {
 
 // TeleConfig holds the information needed to publish to a Telegram webhook for sending alerts
 type TeleConfig struct {
-	Enabled           bool     `yaml:"enabled"`
+	Enabled           *bool    `yaml:"enabled"`
 	ApiKey            string   `yaml:"api_key"`
 	Channel           string   `yaml:"channel"`
 	Mentions          []string `yaml:"mentions"`
@@ -307,7 +346,7 @@ type TeleConfig struct {
 
 // SlackConfig holds the information needed to publish to a Slack webhook for sending alerts
 type SlackConfig struct {
-	Enabled           bool     `yaml:"enabled"`
+	Enabled           *bool    `yaml:"enabled"`
 	Webhook           string   `yaml:"webhook"`
 	Mentions          []string `yaml:"mentions"`
 	SeverityThreshold string   `yaml:"severity_threshold"`
@@ -339,9 +378,9 @@ func validateConfig(c *Config) (fatal bool, problems []string) {
 		}
 	}
 
-	if c.Pagerduty.Enabled {
+	if boolVal(c.DefaultAlertConfig.Pagerduty.Enabled) {
 		rex := regexp.MustCompile(`[+_-]`)
-		if rex.MatchString(c.Pagerduty.ApiKey) {
+		if rex.MatchString(c.DefaultAlertConfig.Pagerduty.ApiKey) {
 			fatal = true
 			problems = append(problems, "error: The Pagerduty key provided appears to be an Oauth token, not a V2 Events API key.")
 		}
@@ -349,6 +388,11 @@ func validateConfig(c *Config) (fatal bool, problems []string) {
 
 	if c.NodeDownMin < 3 {
 		problems = append(problems, "warning: setting 'node_down_alert_minutes' to less than three minutes might result in false alarms")
+	}
+
+	// when undefined, or invalid, we set 6 as the default value
+	if c.GovernanceAlertsReminderInterval <= 0 {
+		c.GovernanceAlertsReminderInterval = 6
 	}
 
 	var wantsPublic bool
@@ -368,88 +412,8 @@ func validateConfig(c *Config) (fatal bool, problems []string) {
 
 		v.valInfo = &ValInfo{Moniker: "not connected"}
 
-		// when undefined, or invalid, we set 6 as the default value
-		if c.GovernanceAlertsReminderInterval <= 0 {
-			c.GovernanceAlertsReminderInterval = 6
-		}
+		applyAlertDefaults(&v.Alerts, &c.DefaultAlertConfig)
 
-		// the bools for enabling alerts are deprecated with full configs preferred,
-		// don't break if someone is still using them:
-		if v.Alerts.DiscordAlerts && !v.Alerts.Discord.Enabled {
-			v.Alerts.Discord.Enabled = true
-		}
-		if v.Alerts.TelegramAlerts && !v.Alerts.Telegram.Enabled {
-			v.Alerts.Telegram.Enabled = true
-		}
-		if v.Alerts.PagerdutyAlerts && !v.Alerts.Pagerduty.Enabled {
-			v.Alerts.Pagerduty.Enabled = true
-		}
-
-		// default values for severity thresholds
-		if c.Discord.SeverityThreshold == "" {
-			c.Discord.SeverityThreshold = "info"
-		}
-		if c.Slack.SeverityThreshold == "" {
-			c.Slack.SeverityThreshold = "info"
-		}
-		if c.Telegram.SeverityThreshold == "" {
-			c.Telegram.SeverityThreshold = "info"
-		}
-		if c.Pagerduty.SeverityThreshold == "" {
-			c.Pagerduty.SeverityThreshold = "critical"
-		}
-
-		// if the settings are blank, copy in the defaults:
-		if v.Alerts.Discord.Webhook == "" {
-			v.Alerts.Discord.Webhook = c.Discord.Webhook
-			v.Alerts.Discord.Mentions = c.Discord.Mentions
-		}
-		if v.Alerts.Discord.SeverityThreshold == "" {
-			v.Alerts.Discord.SeverityThreshold = c.Discord.SeverityThreshold
-		}
-		if v.Alerts.Slack.Webhook == "" {
-			v.Alerts.Slack.Webhook = c.Slack.Webhook
-			v.Alerts.Slack.Mentions = c.Slack.Mentions
-		}
-		if v.Alerts.Slack.SeverityThreshold == "" {
-			v.Alerts.Slack.SeverityThreshold = c.Slack.SeverityThreshold
-		}
-		if v.Alerts.Telegram.ApiKey == "" {
-			v.Alerts.Telegram.ApiKey = c.Telegram.ApiKey
-			v.Alerts.Telegram.Mentions = c.Telegram.Mentions
-		}
-		if v.Alerts.Telegram.SeverityThreshold == "" {
-			v.Alerts.Telegram.SeverityThreshold = c.Telegram.SeverityThreshold
-		}
-		if v.Alerts.Telegram.Channel == "" {
-			v.Alerts.Telegram.Channel = c.Telegram.Channel
-		}
-		if v.Alerts.Pagerduty.ApiKey == "" {
-			v.Alerts.Pagerduty.ApiKey = c.Pagerduty.ApiKey
-			v.Alerts.Pagerduty.DefaultSeverity = c.Pagerduty.DefaultSeverity
-		}
-		if v.Alerts.Pagerduty.SeverityThreshold == "" {
-			v.Alerts.Pagerduty.SeverityThreshold = c.Pagerduty.SeverityThreshold
-		}
-
-		switch {
-		case v.Alerts.Slack.Enabled && !c.Slack.Enabled:
-			problems = append(problems, fmt.Sprintf("warn: %20s is configured for slack alerts, but it is not enabled", k))
-			fallthrough
-		case v.Alerts.Discord.Enabled && !c.Discord.Enabled:
-			problems = append(problems, fmt.Sprintf("warn: %20s is configured for discord alerts, but it is not enabled", k))
-			fallthrough
-		case v.Alerts.Pagerduty.Enabled && !c.Pagerduty.Enabled:
-			problems = append(problems, fmt.Sprintf("warn: %20s is configured for pagerduty alerts, but it is not enabled", k))
-			fallthrough
-		case v.Alerts.Telegram.Enabled && !c.Telegram.Enabled:
-			problems = append(problems, fmt.Sprintf("warn: %20s is configured for telegram alerts, but it is not enabled", k))
-		case !v.Alerts.ConsecutiveAlerts && !v.Alerts.PercentageAlerts && !v.Alerts.AlertIfInactive && !v.Alerts.AlertIfNoServers && !v.Alerts.ConsecutiveEmptyAlerts && !v.Alerts.EmptyPercentageAlerts:
-			problems = append(problems, fmt.Sprintf("warn: %20s has no alert types configured", k))
-			fallthrough
-		case !v.Alerts.Pagerduty.Enabled && !v.Alerts.Discord.Enabled && !v.Alerts.Telegram.Enabled && !v.Alerts.Slack.Enabled:
-			problems = append(problems, fmt.Sprintf("warn: %20s has no notifications configured", k))
-		}
 		if td.EnableDash {
 			td.updateChan <- &dash.ChainStatus{
 				MsgType:                 "status",
@@ -658,24 +622,24 @@ func loadConfig(yamlFile, stateFile, chainConfigDirectory string, password *stri
 	if saved.Alarms != nil {
 		if saved.Alarms.SentTgAlarms != nil {
 			alarms.SentTgAlarms = saved.Alarms.SentTgAlarms
-			clearStale(alarms.SentTgAlarms, "telegram", c.Pagerduty.Enabled, staleHours)
+			clearStale(alarms.SentTgAlarms, "telegram", boolVal(c.DefaultAlertConfig.Pagerduty.Enabled), staleHours)
 		}
 		if saved.Alarms.SentPdAlarms != nil {
 			alarms.SentPdAlarms = saved.Alarms.SentPdAlarms
-			clearStale(alarms.SentPdAlarms, "PagerDuty", c.Pagerduty.Enabled, staleHours)
+			clearStale(alarms.SentPdAlarms, "PagerDuty", boolVal(c.DefaultAlertConfig.Pagerduty.Enabled), staleHours)
 		}
 		if saved.Alarms.SentDiAlarms != nil {
 			alarms.SentDiAlarms = saved.Alarms.SentDiAlarms
-			clearStale(alarms.SentDiAlarms, "Discord", c.Pagerduty.Enabled, staleHours)
+			clearStale(alarms.SentDiAlarms, "Discord", boolVal(c.DefaultAlertConfig.Pagerduty.Enabled), staleHours)
 		}
 		if saved.Alarms.SentSlkAlarms != nil {
 			alarms.SentSlkAlarms = saved.Alarms.SentSlkAlarms
-			clearStale(alarms.SentSlkAlarms, "Slack", c.Pagerduty.Enabled, staleHours)
+			clearStale(alarms.SentSlkAlarms, "Slack", boolVal(c.DefaultAlertConfig.Pagerduty.Enabled), staleHours)
 		}
 		if saved.Alarms.AllAlarms != nil {
 			alarms.AllAlarms = saved.Alarms.AllAlarms
 			for _, alrm := range saved.Alarms.AllAlarms {
-				clearStale(alrm, "dashboard", c.Pagerduty.Enabled, staleHours)
+				clearStale(alrm, "dashboard", boolVal(c.DefaultAlertConfig.Pagerduty.Enabled), staleHours)
 			}
 		}
 	}
