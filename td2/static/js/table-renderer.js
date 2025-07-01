@@ -210,9 +210,9 @@ export class TableRenderer {
         `<div class="uk-text-center"><span class="uk-width-1-2">${(100 * chainStatus.voting_power_percent).toFixed(1)}%</span></div>`;
       columnIndex++;
 
-      // Column: Validator APR
+      // Column: Validator Projected 30-day Rewards
       row.insertCell(columnIndex).innerHTML =
-        `<div class="uk-text-center"><span class="uk-width-1-2">${(100 * chainStatus.validator_apr).toFixed(1)}%</span></div>`;
+        `<div class="uk-text-center"><span class="uk-width-1-2">${chainStatus.projected_30d_rewards.toFixed(1)}</span></div>`;
       columnIndex++;
 
       // Column: Unvoted Proposals
@@ -240,4 +240,3 @@ export class TableRenderer {
     }
   }
 }
-
