@@ -443,6 +443,8 @@ func validateConfig(c *Config) (fatal bool, problems []string) {
 				SelfDelegationRewards:   v.valInfo.SelfDelegationRewards,
 				Commission:              v.valInfo.Commission,
 				CryptoPrice:             v.cryptoPrice,
+				DenomMetadata:           v.denomMetadata,
+				Projected30DRewards:     v.valInfo.Projected30DRewards,
 			}
 		}
 	}

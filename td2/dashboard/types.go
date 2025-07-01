@@ -2,6 +2,7 @@ package dash
 
 import (
 	github_com_cosmos_cosmos_sdk_types "github.com/cosmos/cosmos-sdk/types"
+	bank "github.com/cosmos/cosmos-sdk/x/bank/types"
 	utils "github.com/firstset/tenderduty/v2/td2/utils"
 )
 
@@ -34,6 +35,8 @@ type ChainStatus struct {
 	SelfDelegationRewards   *github_com_cosmos_cosmos_sdk_types.DecCoins `json:"self_delegation_rewards"`
 	Commission              *github_com_cosmos_cosmos_sdk_types.DecCoins `json:"commission"`
 	CryptoPrice             *utils.CryptoPrice                           `json:"crypto_price"`
+	DenomMetadata           *bank.Metadata                               `json:"demom_metadata"`
+	Projected30DRewards     float64                                      `json:"projected_30d_rewards"`
 
 	Blocks []int `json:"blocks"`
 }
