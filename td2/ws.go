@@ -208,6 +208,8 @@ func (cc *ChainConfig) WsRun() {
 							SelfDelegationRewards:   cc.valInfo.SelfDelegationRewards,
 							Commission:              cc.valInfo.Commission,
 							CryptoPrice:             cc.cryptoPrice,
+							DenomMetadata:           cc.denomMetadata,
+							Projected30DRewards:     cc.valInfo.Projected30DRewards,
 						}
 					}
 

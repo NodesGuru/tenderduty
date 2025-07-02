@@ -28,46 +28,98 @@ convert_to_fiat:
   currency: USD # or EUR, SEK, etc.
   cache_expiration: 8 # cache the pricing data for 8 hours
 
-# Global setting for pagerduty
-pagerduty:
-  # Should we use PD? Be aware that if this is set to no it overrides individual chain alerting settings.
-  enabled: no
-  # This is an API key, not oauth token, more details to follow, but check the v1 docs for more info
-  api_key: aaaaaaaaaaaabbbbbbbbbbbbbcccccccccccc
-  # Not currently used, but will be soon. This allows setting escalation priorities etc.
-  default_severity: alert
-  # Severity threshold defines the minimum severity level at which the alerts are sent to this channel
-  # In Tenderduty there are three severity levels: info, warning, and critical. `severity_threshold: critical` means that Tenderduty only sends critical alerts to this channel (Pagerduty)
-  severity_threshold: critical
+# Default alert configuration used for all chains unless overridden
+default_alert_config:
+  pagerduty:
+    # Should we use PD? Be aware that if this is set to no it overrides individual chain alerting settings.
+    enabled: no
+    # This is an API key, not oauth token, more details to follow, but check the v1 docs for more info
+    api_key: aaaaaaaaaaaabbbbbbbbbbbbbcccccccccccc
+    # Not currently used, but will be soon. This allows setting escalation priorities etc.
+    default_severity: alert
+    # Severity threshold defines the minimum severity level at which the alerts are sent to this channel
+    # In Tenderduty there are three severity levels: info, warning, and critical. `severity_threshold: critical` means that Tenderduty only sends critical alerts to this channel (Pagerduty)
+    severity_threshold: critical
 
-# Discord settings
-discord:
-  # Alert to discord?
-  enabled: no
-  # The webhook is set by right-clicking on a channel, editing the settings, and configuring a webhook in the intergrations section.
-  webhook: https://discord.com/api/webhooks/999999999999999999/zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz
-  # Severity threshold defines the minimum severity level at which the alerts are sent to this channel
-  severity_threshold: info
+  discord:
+    # Alert to discord?
+    enabled: no
+    # The webhook is set by right-clicking on a channel, editing the settings, and configuring a webhook in the intergrations section.
+    webhook: https://discord.com/api/webhooks/999999999999999999/zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz
+    # Severity threshold defines the minimum severity level at which the alerts are sent to this channel
+    severity_threshold: info
 
-# Telegram settings
-telegram:
-  # Alert via telegram? Note: also supersedes chain-specific settings
-  enabled: no
-  # API key ... talk to @BotFather
-  api_key: "5555555555:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
-  # The group ID for the chat where messages will be sent. Google how to find this, will include better info later.
-  channel: "-666666666"
-  # Severity threshold defines the minimum severity level at which the alerts are sent to this channel
-  severity_threshold: info
+  telegram:
+    # Alert via telegram? Note: also supersedes chain-specific settings
+    enabled: no
+    # API key ... talk to @BotFather
+    api_key: "5555555555:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+    # The group ID for the chat where messages will be sent. Google how to find this, will include better info later.
+    channel: "-666666666"
+    # Severity threshold defines the minimum severity level at which the alerts are sent to this channel
+    severity_threshold: info
 
-# Slack settings
-slack:
-  # Send alerts to Slack?
-  enabled: no
-  # The webhook can be added in the Slack app directory.
-  webhook: https://hooks.slack.com/services/AAAAAAAAAAAAAAAAAAAAAAA/bbbbbbbbbbbbbbbbbbbbbbbb
-  # Severity threshold defines the minimum severity level at which the alerts are sent to this channel
-  severity_threshold: info
+  slack:
+    # Send alerts to Slack?
+    enabled: no
+    # The webhook can be added in the Slack app directory.
+    webhook: https://hooks.slack.com/services/AAAAAAAAAAAAAAAAAAAAAAA/bbbbbbbbbbbbbbbbbbbbbbbb
+    # Severity threshold defines the minimum severity level at which the alerts are sent to this channel
+    severity_threshold: info
+
+  # Alert defaults shared by all chains
+  # If the chain stops seeing new blocks, should an alert be sent?
+  stalled_enabled: yes
+  # How long a halted chain takes in minutes to generate an alarm
+  stalled_minutes: 10
+  # Most basic alarm, you just missed x blocks ... would you like to know?
+  consecutive_enabled: yes
+  # How many missed blocks should trigger a notification?
+  consecutive_missed: 5
+  # Consecutive Missed alert Pagerduty Severity
+  consecutive_priority: critical
+
+  # For each chain there is a specific window of blocks and a percentage of missed blocks that will result in
+  # a downtime jail infraction. Should an alert be sent if a certain percentage of this window is exceeded?
+  percentage_enabled: no
+  # What percentage should trigger the alert
+  percentage_missed: 10
+  # Percentage Missed alert Pagerduty Severity
+  percentage_priority: warning
+
+  # Empty blocks notification configuration
+  consecutive_empty_enabled: no
+  # How many consecutive empty blocks should trigger a notification?
+  consecutive_empty: 5
+  # Consecutive Empty alert Pagerduty Severity
+  consecutive_empty_priority: warning
+
+  # For some Cosmos EVM chains, empty consensus blocks may decrease execution uptime
+  # since they aren't included in EVM state. Should an alert be sent if empty blocks are detected?
+  empty_percentage_enabled: no
+  # What percentage should trigger the alert
+  empty_percentage: 2
+  # Percentage Empty alert Pagerduty Severity
+  empty_percentage_priority: warning
+
+  # Should an alert be sent if the validator is not in the active set ie, jailed,
+  # tombstoned, unbonding?
+  alert_if_inactive: yes
+  # Should an alert be sent if no RPC servers are responding? (Note this alarm is instantaneous with no delay)
+
+  alert_if_no_servers: yes
+  # Should alerts be sent there are open governance proposals?
+  governance_alerts: yes
+
+  # Alert when a validator's stake change goes beyond the threshold
+  stake_change_alerts: yes
+  stake_change_drop_threshold: 0.05 # meaning 5%
+  stake_change_increase_threshold: 0.05 # meaning 5%
+
+  # Alert when a validator has more than the threhold value of unclaimed rewards
+  # The threshold is defined with a fiat currency unit like USD, so this feature requires properly configuring coin_market_cap_api_token and enabling convert_to_fiat
+  unclaimed_rewards_alerts: yes
+  unclaimed_rewards_threshold_in_fiat_currency: 10000
 
 # Healthcheck settings (dead man's switch)
 healthcheck:
@@ -100,88 +152,18 @@ chains:
     slug: osmosis
 
     # Without specifying this option, the inflationRate is queried from a RPC call, but it may not be available for some chains
-    # If the inflration rate cannot be queried, you can use this option to explicitly set the value
+    # If the inflation rate cannot be queried, you can use this option to explicitly set the value
     inflationRate: 0.04
 
-    # Controls various alert settings for each chain.
+    # the following section follows the same structure defined in `default_alert_config` and is used for overriding specific values
     alerts:
-      # If the chain stops seeing new blocks, should an alert be sent?
-      stalled_enabled: yes
-      # How long a halted chain takes in minutes to generate an alarm
-      stalled_minutes: 10
-
-      # Most basic alarm, you just missed x blocks ... would you like to know?
-      consecutive_enabled: yes
-      # How many missed blocks should trigger a notification?
-      consecutive_missed: 5
-      # Consecutive Missed alert Pagerduty Severity
-      consecutive_priority: critical
-
-      # For each chain there is a specific window of blocks and a percentage of missed blocks that will result in
-      # a downtime jail infraction. Should an alert be sent if a certain percentage of this window is exceeded?
-      percentage_enabled: no
-      # What percentage should trigger the alert
-      percentage_missed: 10
-      # Percentage Missed alert Pagerduty Severity
-      percentage_priority: warning
-
-      # Empty blocks notification configuration
+      # an example for enabling empty blocks alert, which is disabled by default
       consecutive_empty_enabled: yes
-      # How many consecutive empty blocks should trigger a notification?
       consecutive_empty: 3
-      # Consecutive Empty alert Pagerduty Severity
       consecutive_empty_priority: critical
-
-      # For some Cosmos EVM chains, empty consensus blocks may decrease execution uptime
-      # since they aren't included in EVM state. Should an alert be sent if empty blocks are detected?
-      empty_percentage_enabled: yes
-      # What percentage should trigger the alert
-      empty_percentage: 2
-      # Percentage Empty alert Pagerduty Severity
-      empty_percentage_priority: warning
-
-      # Should an alert be sent if the validator is not in the active set ie, jailed,
-      # tombstoned, unbonding?
-      alert_if_inactive: yes
-      # Should an alert be sent if no RPC servers are responding? (Note this alarm is instantaneous with no delay)
-      alert_if_no_servers: yes
-
-      # Should alerts be sent there are open governance proposals?
-      governance_alerts: yes
-
-      # Alert when a validator's stake change goes beyond the threshold
-      stake_change_alerts: yes
-      stake_change_drop_threshold: 0.1 # meaning 10%
-      stake_change_increase_threshold: 0.1 # meaning 10%
-
-      # Alert when a validator has more than the threhold value of unclaimed rewards
-      # The threshold is defined with a fiat currency unit like USD, so this feature requires properly configuring coin_market_cap_api_token and enabling convert_to_fiat
-      unclaimed_rewards_alerts: yes
-      unclaimed_rewards_threshold_in_fiat_currency: 10000
-
-      # for this *specific* chain it's possible to override alert settings. If the api_key or webhook addresses are empty,
-      # the global settings will be used. Note, enabled must be set both globally and for each chain.
-
-      # Chain specific setting for pagerduty
+      # an example for disabling the pagerduty alert channel, which is enabled by default
       pagerduty:
-        enabled: yes
-        api_key: "" # uses default if blank
-
-      # Discord settings
-      discord:
-        enabled: yes
-        webhook: "" # uses default if blank
-
-      # Telegram settings
-      telegram:
-        enabled: yes
-        api_key: "" # uses default if blank
-        channel: "" # uses default if blank
-
-      # Slack settings
-      slack:
-        enabled: yes
-        webhook: "" # uses default if blank
+        enabled: no
 
     # This section covers our RPC providers. No LCD (aka REST) endpoints are used, only TM's RPC endpoints
     # Multiple hosts are encouraged, and will be tried sequentially until a working endpoint is discovered.

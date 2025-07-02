@@ -1,5 +1,5 @@
 ---
-name: Gosec
+name: Gosec Security Scanner
 on:
   push:
     branches:
@@ -12,7 +12,7 @@ on:
       - release/*
       - develop
 jobs:
-  tests:
+  scan:
     runs-on: ubuntu-latest
     env:
       GO111MODULE: on

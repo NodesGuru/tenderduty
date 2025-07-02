@@ -30,6 +30,7 @@ type ValInfo struct {
 	VotingPowerPercent    float64                                      `json:"voting_power_percent"`
 	CommissionRate        float64                                      `json:"commission_rate"`
 	ValidatorAPR          float64                                      `json:"validator_apr"`
+	Projected30DRewards   float64                                      `json:"projected_30d_rewards"`
 	SelfDelegationRewards *github_com_cosmos_cosmos_sdk_types.DecCoins `json:"self_delegation_rewards"`
 	Commission            *github_com_cosmos_cosmos_sdk_types.DecCoins `json:"commission"`
 }
@@ -250,6 +251,33 @@ func (cc *ChainConfig) GetValInfo(first bool) (err error) {
 			cc.inflationRate = inflationRate
 			cc.baseAPR = inflationRate * (1 - communityTax) * totalSupply / cc.totalBondedTokens
 			cc.valInfo.ValidatorAPR = cc.baseAPR * (1 - cc.valInfo.CommissionRate)
+
+			if cc.cryptoPrice != nil {
+				// Calculate the validator's projected 30-day rewards in base units
+				projected30DRewardsBaseUnits := cc.valInfo.DelegatedTokens * cc.valInfo.ValidatorAPR * cc.valInfo.CommissionRate * 30 / 365
+
+				// Convert from base units to display units using exponent
+				var displayExponent uint32 = 0
+				if cc.denomMetadata.Display != "" {
+					// Find the exponent for the display denomination
+					for _, unit := range cc.denomMetadata.DenomUnits {
+						if unit.Denom == cc.denomMetadata.Display {
+							displayExponent = unit.Exponent
+							break
+						}
+					}
+				}
+
+				// Convert to display units by dividing by 10^exponent
+				projected30DRewardsDisplayUnits := projected30DRewardsBaseUnits
+				for i := uint32(0); i < displayExponent; i++ {
+					projected30DRewardsDisplayUnits = projected30DRewardsDisplayUnits / 10
+				}
+
+				// Convert to fiat currency
+				cc.valInfo.Projected30DRewards = projected30DRewardsDisplayUnits * cc.cryptoPrice.Price
+			}
+
 		} else {
 			l(fmt.Errorf("failed to query APR-related data such as total supply, community tax and inflation rate for chain %s, err: %w", cc.name, err))
 		}
@@ -267,7 +295,7 @@ func (cc *ChainConfig) GetValInfo(first bool) (err error) {
 	}
 
 	// Log if governance alerts are disabled (only on first run)
-	if first && !cc.Alerts.GovernanceAlerts {
+	if first && !boolVal(cc.Alerts.GovernanceAlerts) {
 		l(fmt.Sprintf("ℹ️ Governance alerts disabled for %s (%s)", cc.ValAddress, cc.valInfo.Moniker))
 	}
 

@@ -137,6 +137,8 @@ func (cc *ChainConfig) newRpc() error {
 			SelfDelegationRewards:   cc.valInfo.SelfDelegationRewards,
 			Commission:              cc.valInfo.Commission,
 			CryptoPrice:             cc.cryptoPrice,
+			DenomMetadata:           cc.denomMetadata,
+			Projected30DRewards:     cc.valInfo.Projected30DRewards,
 		}
 	}
 	return errors.New("no usable endpoints available for " + cc.ChainId)
