@@ -158,7 +158,9 @@ func (c *CoinMarketCapClient) fetchPricesFromAPI(ctx context.Context, slugs []st
 
 		// Always close the response body
 		defer func(slug string, body io.ReadCloser) {
-			body.Close()
+			if err := body.Close(); err != nil {
+				fmt.Printf("Error closing response body for slug %s: %v\n", slug, err)
+			}
 		}(slug, resp.Body)
 
 		// If status is not OK, skip this slug

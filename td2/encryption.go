@@ -10,11 +10,12 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"github.com/go-passwd/validator"
-	"golang.org/x/crypto/argon2"
 	"io"
 	"log"
 	"os"
+
+	"github.com/go-passwd/validator"
+	"golang.org/x/crypto/argon2"
 )
 
 const (
@@ -86,11 +87,15 @@ func encrypt(plainText []byte, password string) (encryptedConfig []byte, err err
 	buf.Write(salt)
 	buf.Write(iv)
 
-	cbc := cipher.NewCBCEncrypter(blk, iv)
+	cbc := cipher.NewCBCEncrypter(blk, iv) // #nosec G407 - IV is generated randomly with crypto/rand above
 
 	// pad the plaintext
 	padLen := cbc.BlockSize() - (len(plainText) % cbc.BlockSize())
 	if padLen > 0 {
+		// Safe conversion with overflow check
+		if padLen > 255 { // max uint8
+			return nil, fmt.Errorf("padding length too large for uint8: %d", padLen)
+		}
 		plainText = append(plainText, bytes.Repeat([]byte{uint8(padLen)}, padLen)...)
 	}
 
@@ -124,7 +129,6 @@ func encrypt(plainText []byte, password string) (encryptedConfig []byte, err err
 // decrypt takes a base64 encoded []byte with salt + iv + ciphertext + mac, the password, and authenticates the HMAC
 // before it gives back the decrypted configuration.
 func decrypt(encodedFile []byte, password string) (plainText []byte, err error) {
-
 	cipherText := make([]byte, base64.StdEncoding.DecodedLen(len(encodedFile)))
 	size, err := base64.StdEncoding.Decode(cipherText, encodedFile)
 	if err != nil {
@@ -182,7 +186,7 @@ func decrypt(encodedFile []byte, password string) (plainText []byte, err error) 
 
 // EncryptedConfig handles conversion of an encrypted or plaintext config to disk
 func EncryptedConfig(plaintext, ciphertext, pass string, decrypting bool) error {
-	var infile, outfile = plaintext, ciphertext
+	infile, outfile := plaintext, ciphertext
 	if decrypting {
 		outfile, infile = plaintext, ciphertext
 	}

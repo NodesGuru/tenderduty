@@ -275,6 +275,10 @@ func (d *NamadaProvider) QuerySigningInfo(ctx context.Context) (*slashing.Valida
 	hexAddress := strings.ToUpper(hex.EncodeToString(d.ChainConfig.valInfo.Conspub))
 	for _, v := range livenessInfo.Validators {
 		if v.CometAddress == hexAddress {
+			// Safe conversion with overflow check
+			if v.MissedVotes > 9223372036854775807 { // max int64
+				return nil, fmt.Errorf("MissedVotes too large for int64: %d", v.MissedVotes)
+			}
 			signingInfo.MissedBlocksCounter = int64(v.MissedVotes)
 		}
 	}
@@ -286,6 +290,11 @@ func (d *NamadaProvider) QuerySlashingParams(ctx context.Context) (*slashing.Par
 	livenessInfo, err := getLivenessInfo(ctx, d.ChainConfig.client)
 	if err != nil {
 		return nil, err
+	}
+
+	// Safe conversion with overflow check
+	if livenessInfo.LivenessWindowLen > 9223372036854775807 { // max int64
+		return nil, fmt.Errorf("LivenessWindowLen too large for int64: %d", livenessInfo.LivenessWindowLen)
 	}
 
 	return &slashing.Params{SignedBlocksWindow: int64(livenessInfo.LivenessWindowLen), MinSignedPerWindow: cosmos_sdk_types.MustNewDecFromStr(livenessInfo.LivenessThreshold.String())}, nil
