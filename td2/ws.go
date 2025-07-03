@@ -92,6 +92,7 @@ func (cc *ChainConfig) WsRun() {
 		break
 	}
 
+	//#nosec G402 -- configurable option
 	cc.wsclient, err = NewClient(cc.client.Remote(), td.TLSSkipVerify)
 	if err != nil {
 		l(err)
@@ -466,6 +467,7 @@ func NewClient(u string, allowInsecure bool) (*TmConn, error) {
 		// Add custom TLS dialer to allow self-signed certs
 		dialer := &websocket.Dialer{
 			TLSClientConfig: &tls.Config{
+				//#nosec G402 -- allowInsecure is true and that is configured by the user
 				InsecureSkipVerify: true,
 			},
 			HandshakeTimeout: 10 * time.Second,

@@ -103,6 +103,7 @@ func (d *NamadaProvider) QueryUnvotedOpenProposals(ctx context.Context) ([]gov.P
 	if ok1 && ok2 {
 		// Create a reusable HTTP client with timeout
 		tr := &http.Transport{
+			//#nosec G402 -- configurable option
 			TLSClientConfig: &tls.Config{InsecureSkipVerify: td.TLSSkipVerify},
 		}
 		httpClient := &http.Client{
@@ -310,6 +311,7 @@ func (d *NamadaProvider) QueryValidatorSelfDelegationRewardsAndCommission(ctx co
 	if ok1 && ok2 {
 		// Create a reusable HTTP client with timeout
 		tr := &http.Transport{
+			//#nosec G402 -- configurable option
 			TLSClientConfig: &tls.Config{InsecureSkipVerify: td.TLSSkipVerify},
 		}
 		httpClient := &http.Client{
@@ -368,6 +370,7 @@ func (d *NamadaProvider) QueryValidatorVotingPool(ctx context.Context) (votingPo
 	if ok {
 		// Create a reusable HTTP client with timeout
 		tr := &http.Transport{
+			//#nosec G402 -- configurable option
 			TLSClientConfig: &tls.Config{InsecureSkipVerify: td.TLSSkipVerify},
 		}
 		httpClient := &http.Client{
