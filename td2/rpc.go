@@ -310,6 +310,7 @@ func getStatusWithEndpoint(ctx context.Context, u string) (string, bool, error) 
 	}
 
 	tr := &http.Transport{
+		//#nosec G402 -- configurable option
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: td.TLSSkipVerify},
 	}
 	client := &http.Client{Transport: tr}

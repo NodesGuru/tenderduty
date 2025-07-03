@@ -61,6 +61,7 @@ func (d *DefaultProvider) CheckIfValidatorVoted(ctx context.Context, proposalID 
 
 	// Create a reusable HTTP client with timeout
 	tr := &http.Transport{
+		//#nosec G402 -- configurable option
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: td.TLSSkipVerify},
 	}
 	client := &http.Client{
