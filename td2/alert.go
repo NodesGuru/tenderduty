@@ -724,29 +724,62 @@ func (cc *ChainConfig) watch() {
 		}
 
 		// validator unclaimed rewards alert
+		// based on our observations, SelfDelegationRewards and Commission always use the base unit, or use the same unit
+		// might be buggy for some chains
 		if boolVal(cc.Alerts.UnclaimedRewardsAlerts) && td.PriceConversion.Enabled && cc.valInfo.SelfDelegationRewards != nil && cc.valInfo.Commission != nil {
-			totalRewards := github_com_cosmos_cosmos_sdk_types.DecCoin{
-				Denom:  (*cc.valInfo.SelfDelegationRewards)[0].Denom,
-				Amount: github_com_cosmos_cosmos_sdk_types.ZeroDec(),
-			}
-			totalRewards = totalRewards.Add((*cc.valInfo.SelfDelegationRewards)[0])
-			totalRewards = totalRewards.Add((*cc.valInfo.Commission)[0])
-			coinPrice, err := td.coinMarketCapClient.GetPrice(td.ctx, cc.Slug)
-			if err == nil {
-				totalRewardsConverted := totalRewards.Amount.MustFloat64() * coinPrice.Price
-				id := cc.valInfo.Valcons + "_unclaimed_rewards"
-				severity := "warning"
-				message := fmt.Sprintf("%s has more than %.0f %s unclaimed rewards on %s", cc.valInfo.Moniker, floatVal(cc.Alerts.UnclaimedRewardsThreshold), td.PriceConversion.Currency, cc.name)
-				if totalRewardsConverted > floatVal(cc.Alerts.UnclaimedRewardsThreshold) {
-					td.alert(cc.name, message, severity, false, &id)
-					unclaimedRewardsAlarm = true
+			selfRewardsLen := len(*cc.valInfo.SelfDelegationRewards)
+			commissionLen := len(*cc.valInfo.Commission)
+
+			if selfRewardsLen > 0 || commissionLen > 0 {
+				var denom string
+				var totalRewards github_com_cosmos_cosmos_sdk_types.DecCoin
+
+				// Initialize totalRewards based on available data
+				if selfRewardsLen > 0 {
+					firstReward := (*cc.valInfo.SelfDelegationRewards)[0]
+					denom = firstReward.Denom
+					totalRewards = github_com_cosmos_cosmos_sdk_types.DecCoin{
+						Denom:  denom,
+						Amount: firstReward.Amount, // Start with the first reward instead of zero
+					}
+
+					// Add commission if available and same denom
+					if commissionLen > 0 {
+						totalRewards = totalRewards.Add((*cc.valInfo.Commission)[0])
+					}
 				} else {
-					if unclaimedRewardsAlarm {
+					// Only commission available
+					firstCommission := (*cc.valInfo.Commission)[0]
+					totalRewards = github_com_cosmos_cosmos_sdk_types.DecCoin{
+						Denom:  firstCommission.Denom,
+						Amount: firstCommission.Amount,
+					}
+				}
+
+				// Get price only once we know we have rewards to check
+				coinPrice, err := td.coinMarketCapClient.GetPrice(td.ctx, cc.Slug)
+				if err == nil {
+					totalRewardsConverted := totalRewards.Amount.MustFloat64() * coinPrice.Price
+					threshold := floatVal(cc.Alerts.UnclaimedRewardsThreshold)
+
+					// Pre-compute alert components
+					id := cc.valInfo.Valcons + "_unclaimed_rewards"
+					const severity = "warning"
+					message := fmt.Sprintf("%s has more than %.0f %s unclaimed rewards on %s",
+						cc.valInfo.Moniker, threshold, td.PriceConversion.Currency, cc.name)
+
+					if totalRewardsConverted > threshold {
+						if !unclaimedRewardsAlarm { // Only alert if not already alarmed
+							td.alert(cc.name, message, severity, false, &id)
+							unclaimedRewardsAlarm = true
+						}
+					} else if unclaimedRewardsAlarm {
 						td.alert(cc.name, message, severity, true, &id)
 						unclaimedRewardsAlarm = false
 					}
+
+					cc.activeAlerts = alarms.getCount(cc.name)
 				}
-				cc.activeAlerts = alarms.getCount(cc.name)
 			}
 		}
 
