@@ -740,7 +740,7 @@ func (cc *ChainConfig) watch() {
 			alertID := fmt.Sprintf("StakeChange_%s", cc.ValAddress)
 			severity := "warning"
 			unit := "base"
-			if cc.denomMetadata != nil {
+			if cc.denomMetadata != nil && cc.Provider.Name != "namada" {
 				var stakeNowConverted, stakeBeforeConverted float64
 				var displayUnit string
 				var err0, err1 error
@@ -751,6 +751,9 @@ func (cc *ChainConfig) watch() {
 					stakeBefore = stakeBeforeConverted
 					unit = displayUnit
 				}
+			} else if cc.Provider.Name == "namada" {
+				// for Namada, the stake is recorded in NAM
+				unit = "NAM"
 			}
 			message := fmt.Sprintf("%s's stake has %s by %.1g%% (%.1g %s now) compared to the previous check (%.1g %s)", cc.valInfo.Moniker, trend, math.Abs(stakeChangePercent)*100, stakeNow, unit, stakeBefore, unit)
 			if math.Abs(stakeChangePercent) >= threshold {
@@ -807,15 +810,16 @@ func (cc *ChainConfig) watch() {
 					// Pre-compute alert components
 					alertID := fmt.Sprintf("UnclaimedRewards_%s", cc.ValAddress)
 					const severity = "warning"
-					message := fmt.Sprintf("%s has more than %.0f %s unclaimed rewards on %s",
-						cc.valInfo.Moniker, threshold, td.PriceConversion.Currency, cc.name)
-
 					if totalRewardsConverted > threshold {
 						if !unclaimedRewardsAlarm { // Only alert if not already alarmed
+							message := fmt.Sprintf("%s has more than %.0f (%.0f currently) %s unclaimed rewards on %s",
+								cc.valInfo.Moniker, threshold, totalRewardsConverted, td.PriceConversion.Currency, cc.name)
 							td.alert(cc.name, message, severity, false, &alertID)
 							unclaimedRewardsAlarm = true
 						}
 					} else if unclaimedRewardsAlarm {
+						message := fmt.Sprintf("%s has more than %.0f %s unclaimed rewards on %s",
+							cc.valInfo.Moniker, threshold, td.PriceConversion.Currency, cc.name)
 						td.alert(cc.name, message, severity, true, &alertID)
 						unclaimedRewardsAlarm = false
 					}
