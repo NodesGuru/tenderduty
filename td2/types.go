@@ -591,11 +591,11 @@ func loadConfig(yamlFile, stateFile, chainConfigDirectory string, password *stri
 
 	// handle cached data. FIXME: incomplete.
 	c.alarms = &alarmCache{
-		SentPdAlarms:  make(map[string]time.Time),
-		SentTgAlarms:  make(map[string]time.Time),
-		SentDiAlarms:  make(map[string]time.Time),
-		SentSlkAlarms: make(map[string]time.Time),
-		AllAlarms:     make(map[string]map[string]time.Time),
+		SentPdAlarms:  make(map[string]alertMsgCache),
+		SentTgAlarms:  make(map[string]alertMsgCache),
+		SentDiAlarms:  make(map[string]alertMsgCache),
+		SentSlkAlarms: make(map[string]alertMsgCache),
+		AllAlarms:     make(map[string]map[string]alertMsgCache),
 		notifyMux:     sync.RWMutex{},
 	}
 
@@ -711,9 +711,9 @@ func loadConfig(yamlFile, stateFile, chainConfigDirectory string, password *stri
 	return c, nil
 }
 
-func clearStale(alarms map[string]time.Time, what string, hasPagerduty bool, hours float64) {
+func clearStale(alarms map[string]alertMsgCache, what string, hasPagerduty bool, hours float64) {
 	for k := range alarms {
-		if time.Since(alarms[k]).Hours() >= hours {
+		if time.Since(alarms[k].SentTime).Hours() >= hours {
 			l(fmt.Sprintf("🗑 not restoring old alarm (%v >%.2f hours) from cache - %s", alarms[k], hours, k))
 			if hasPagerduty && what == "pagerduty" {
 				l("NOTE: stale alarms may need to be manually cleared from PagerDuty!")
