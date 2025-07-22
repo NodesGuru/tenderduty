@@ -516,6 +516,7 @@ func evaluatePercentageBlocksMissedAlert(cc *ChainConfig) (bool, bool) {
 			)
 		}
 	}
+
 	cc.activeAlerts = alarms.getCount(cc.name)
 	return alert, resolved
 }
@@ -617,6 +618,7 @@ func evaluateValidatorInactiveAlert(cc *ChainConfig) (bool, bool) {
 		}
 	}
 
+	cc.activeAlerts = alarms.getCount(cc.name)
 	return alert, resolved
 }
 
