@@ -108,6 +108,17 @@ func (a *alarmCache) clearAll(chain string) {
 	a.AllAlarms[chain] = make(map[string]alertMsgCache)
 }
 
+func (a *alarmCache) exist(chain string, alertID string) bool {
+	if a.AllAlarms == nil || a.AllAlarms[chain] == nil {
+		return false
+	}
+	a.notifyMux.RLock()
+	defer a.notifyMux.RUnlock()
+
+	_, ok := alarms.AllAlarms[chain][alertID]
+	return ok
+}
+
 // alarms is used to prevent double notifications. TODO: save on exit / load on start
 var alarms = &alarmCache{
 	SentPdAlarms:   make(map[string]alertMsgCache),
@@ -445,11 +456,74 @@ func (c *Config) alert(chainName, message, severity string, resolved bool, id *s
 	alarms.AllAlarms[chainName][*id] = cache
 }
 
+func evaluateConsecutiveBlocksMissedAlert(cc *ChainConfig) (bool, bool) {
+	alert, resolved := false, false
+
+	alertID := fmt.Sprintf("ConsecutiveBlocksMissed_%s", cc.ValAddress)
+	if int(cc.statConsecutiveMiss) >= intVal(cc.Alerts.ConsecutiveMissed) {
+		if !alarms.exist(cc.name, alertID) {
+			// alert on missed block counter!
+			td.alert(
+				cc.name,
+				fmt.Sprintf("%s has missed %d blocks on %s", cc.valInfo.Moniker, intVal(cc.Alerts.ConsecutiveMissed), cc.ChainId),
+				cc.Alerts.ConsecutivePriority,
+				false,
+				&alertID,
+			)
+			alert = true
+		} else {
+			if alarms.exist(cc.name, alertID) {
+				// clear the alert
+				td.alert(
+					cc.name,
+					fmt.Sprintf("%s has missed %d blocks on %s", cc.valInfo.Moniker, intVal(cc.Alerts.ConsecutiveMissed), cc.ChainId),
+					cc.Alerts.ConsecutivePriority,
+					true,
+					&alertID,
+				)
+				resolved = true
+			}
+		}
+		cc.activeAlerts = alarms.getCount(cc.name)
+	}
+	return alert, resolved
+}
+
+func evaluatePercentageBlocksMissedAlert(cc *ChainConfig) (bool, bool) {
+	alert, resolved := false, false
+
+	alertID := fmt.Sprintf("PercentageBlocksMissed_%s", cc.ValAddress)
+	if 100*float64(cc.valInfo.Missed)/float64(cc.valInfo.Window) >= float64(intVal(cc.Alerts.Window)) {
+		if !alarms.exist(cc.name, alertID) {
+			// alert on missed block counter!
+			td.alert(
+				cc.name,
+				fmt.Sprintf("%s has missed > %d%% of the slashing window's blocks on %s", cc.valInfo.Moniker, intVal(cc.Alerts.Window), cc.ChainId),
+				cc.Alerts.PercentagePriority,
+				false,
+				&alertID,
+			)
+		}
+	} else {
+		if alarms.exist(cc.name, alertID) {
+			td.alert(
+				cc.name,
+				fmt.Sprintf("%s has missed > %d%% of the slashing window's blocks on %s", cc.valInfo.Moniker, intVal(cc.Alerts.Window), cc.ChainId),
+				cc.Alerts.PercentagePriority,
+				true,
+				&alertID,
+			)
+		}
+	}
+	cc.activeAlerts = alarms.getCount(cc.name)
+	return alert, resolved
+}
+
 // watch handles monitoring for missed blocks, stalled chain, node downtime
 // and also updates a few prometheus stats
 // FIXME: not watching for nodes that are lagging the head block!
 func (cc *ChainConfig) watch() {
-	var missedAlarm, pctAlarm, noNodes, emptyBlocksAlarm, emptyPctAlarm, stakeChangeAlarm, unclaimedRewardsAlarm bool
+	var noNodes, emptyBlocksAlarm, emptyPctAlarm bool
 	inactive := "jailed"
 	nodeAlarms := make(map[string]bool)
 
@@ -570,57 +644,13 @@ func (cc *ChainConfig) watch() {
 		}
 
 		// consecutive missed block alarms:
-		if !missedAlarm && boolVal(cc.Alerts.ConsecutiveAlerts) && int(cc.statConsecutiveMiss) >= intVal(cc.Alerts.ConsecutiveMissed) {
-			// alert on missed block counter!
-			missedAlarm = true
-			alertID := fmt.Sprintf("ConsecutiveBlocksMissed_%s", cc.ValAddress)
-			td.alert(
-				cc.name,
-				fmt.Sprintf("%s has missed %d blocks on %s", cc.valInfo.Moniker, intVal(cc.Alerts.ConsecutiveMissed), cc.ChainId),
-				cc.Alerts.ConsecutivePriority,
-				false,
-				&alertID,
-			)
-			cc.activeAlerts = alarms.getCount(cc.name)
-		} else if missedAlarm && int(cc.statConsecutiveMiss) < intVal(cc.Alerts.ConsecutiveMissed) {
-			// clear the alert
-			missedAlarm = false
-			alertID := fmt.Sprintf("ConsecutiveBlocksMissed_%s", cc.ValAddress)
-			td.alert(
-				cc.name,
-				fmt.Sprintf("%s has missed %d blocks on %s", cc.valInfo.Moniker, intVal(cc.Alerts.ConsecutiveMissed), cc.ChainId),
-				cc.Alerts.ConsecutivePriority,
-				true,
-				&alertID,
-			)
-			cc.activeAlerts = alarms.getCount(cc.name)
+		if boolVal(cc.Alerts.ConsecutiveAlerts) {
+			evaluateConsecutiveBlocksMissedAlert(cc)
 		}
 
 		// window percentage missed block alarms
-		if boolVal(cc.Alerts.PercentageAlerts) && !pctAlarm && 100*float64(cc.valInfo.Missed)/float64(cc.valInfo.Window) > float64(intVal(cc.Alerts.Window)) {
-			// alert on missed block counter!
-			pctAlarm = true
-			alertID := fmt.Sprintf("PercentageBlocksMissed_%s", cc.ValAddress)
-			td.alert(
-				cc.name,
-				fmt.Sprintf("%s has missed > %d%% of the slashing window's blocks on %s", cc.valInfo.Moniker, intVal(cc.Alerts.Window), cc.ChainId),
-				cc.Alerts.PercentagePriority,
-				false,
-				&alertID,
-			)
-			cc.activeAlerts = alarms.getCount(cc.name)
-		} else if boolVal(cc.Alerts.PercentageAlerts) && pctAlarm && 100*float64(cc.valInfo.Missed)/float64(cc.valInfo.Window) < float64(intVal(cc.Alerts.Window)) {
-			// clear the alert
-			pctAlarm = false
-			alertID := fmt.Sprintf("PercentageBlocksMissed_%s", cc.ValAddress)
-			td.alert(
-				cc.name,
-				fmt.Sprintf("%s has missed > %d%% of the slashing window's blocks on %s", cc.valInfo.Moniker, intVal(cc.Alerts.Window), cc.ChainId),
-				cc.Alerts.PercentagePriority,
-				true,
-				&alertID,
-			)
-			cc.activeAlerts = alarms.getCount(cc.name)
+		if boolVal(cc.Alerts.PercentageAlerts) {
+			evaluatePercentageBlocksMissedAlert(cc)
 		}
 
 		// empty blocks alarm handling
@@ -636,18 +666,20 @@ func (cc *ChainConfig) watch() {
 				&alertID,
 			)
 			cc.activeAlerts = alarms.getCount(cc.name)
-		} else if emptyBlocksAlarm && int(cc.statConsecutiveEmpty) < intVal(cc.Alerts.ConsecutiveEmpty) {
+		} else if int(cc.statConsecutiveEmpty) < intVal(cc.Alerts.ConsecutiveEmpty) {
 			// clear the alert
 			emptyBlocksAlarm = false
 			alertID := fmt.Sprintf("ConsecutiveEmptyBlocks_%s", cc.ValAddress)
-			td.alert(
-				cc.name,
-				fmt.Sprintf("%s has proposed %d consecutive empty blocks on %s", cc.valInfo.Moniker, intVal(cc.Alerts.ConsecutiveEmpty), cc.ChainId),
-				cc.Alerts.ConsecutiveEmptyPriority,
-				true,
-				&alertID,
-			)
-			cc.activeAlerts = alarms.getCount(cc.name)
+			if _, ok := alarms.AllAlarms[cc.name][alertID]; ok {
+				td.alert(
+					cc.name,
+					fmt.Sprintf("%s has proposed %d consecutive empty blocks on %s", cc.valInfo.Moniker, intVal(cc.Alerts.ConsecutiveEmpty), cc.ChainId),
+					cc.Alerts.ConsecutiveEmptyPriority,
+					true,
+					&alertID,
+				)
+				cc.activeAlerts = alarms.getCount(cc.name)
+			}
 		}
 
 		// window percentage empty block alarms
@@ -673,23 +705,25 @@ func (cc *ChainConfig) watch() {
 				&alertID,
 			)
 			cc.activeAlerts = alarms.getCount(cc.name)
-		} else if boolVal(cc.Alerts.EmptyPercentageAlerts) && emptyPctAlarm && emptyBlocksPercent < float64(intVal(cc.Alerts.EmptyWindow)) {
+		} else if boolVal(cc.Alerts.EmptyPercentageAlerts) && emptyBlocksPercent < float64(intVal(cc.Alerts.EmptyWindow)) {
 			// clear the alert
 			emptyPctAlarm = false
 			alertID := fmt.Sprintf("PercentageEmptyBlocks_%s", cc.ValAddress)
-			td.alert(
-				cc.name,
-				fmt.Sprintf("%s has > %d%% empty blocks (%d of %d proposed blocks) on %s",
-					cc.valInfo.Moniker,
-					intVal(cc.Alerts.EmptyWindow),
-					int(cc.statTotalPropsEmpty),
-					int(cc.statTotalProps),
-					cc.ChainId),
-				cc.Alerts.EmptyPercentagePriority,
-				true,
-				&alertID,
-			)
-			cc.activeAlerts = alarms.getCount(cc.name)
+			if _, ok := alarms.AllAlarms[cc.name][alertID]; ok {
+				td.alert(
+					cc.name,
+					fmt.Sprintf("%s has > %d%% empty blocks (%d of %d proposed blocks) on %s",
+						cc.valInfo.Moniker,
+						intVal(cc.Alerts.EmptyWindow),
+						int(cc.statTotalPropsEmpty),
+						int(cc.statTotalProps),
+						cc.ChainId),
+					cc.Alerts.EmptyPercentagePriority,
+					true,
+					&alertID,
+				)
+				cc.activeAlerts = alarms.getCount(cc.name)
+			}
 		}
 
 		// node down alarms
@@ -758,12 +792,9 @@ func (cc *ChainConfig) watch() {
 			message := fmt.Sprintf("%s's stake has %s by %.1g%% (%.1g %s now) compared to the previous check (%.1g %s)", cc.valInfo.Moniker, trend, math.Abs(stakeChangePercent)*100, stakeNow, unit, stakeBefore, unit)
 			if math.Abs(stakeChangePercent) >= threshold {
 				td.alert(cc.name, message, severity, false, &alertID)
-				stakeChangeAlarm = true
 			} else {
-				if stakeChangeAlarm {
+				if _, ok := alarms.AllAlarms[cc.name][alertID]; ok {
 					td.alert(cc.name, message, severity, true, &alertID)
-					stakeChangeAlarm = false
-
 				}
 			}
 		}
@@ -811,17 +842,17 @@ func (cc *ChainConfig) watch() {
 					alertID := fmt.Sprintf("UnclaimedRewards_%s", cc.ValAddress)
 					const severity = "warning"
 					if totalRewardsConverted > threshold {
-						if !unclaimedRewardsAlarm { // Only alert if not already alarmed
+						if _, ok := alarms.AllAlarms[cc.name][alertID]; !ok {
 							message := fmt.Sprintf("%s has more than %.0f (%.0f currently) %s unclaimed rewards on %s",
 								cc.valInfo.Moniker, threshold, totalRewardsConverted, td.PriceConversion.Currency, cc.name)
 							td.alert(cc.name, message, severity, false, &alertID)
-							unclaimedRewardsAlarm = true
 						}
-					} else if unclaimedRewardsAlarm {
-						message := fmt.Sprintf("%s has more than %.0f %s unclaimed rewards on %s",
-							cc.valInfo.Moniker, threshold, td.PriceConversion.Currency, cc.name)
-						td.alert(cc.name, message, severity, true, &alertID)
-						unclaimedRewardsAlarm = false
+					} else {
+						if _, ok := alarms.AllAlarms[cc.name][alertID]; ok {
+							message := fmt.Sprintf("%s has more than %.0f %s unclaimed rewards on %s",
+								cc.valInfo.Moniker, threshold, td.PriceConversion.Currency, cc.name)
+							td.alert(cc.name, message, severity, true, &alertID)
+						}
 					}
 
 					cc.activeAlerts = alarms.getCount(cc.name)
