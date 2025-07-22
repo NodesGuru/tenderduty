@@ -471,21 +471,22 @@ func evaluateConsecutiveBlocksMissedAlert(cc *ChainConfig) (bool, bool) {
 				&alertID,
 			)
 			alert = true
-		} else {
-			if alarms.exist(cc.name, alertID) {
-				// clear the alert
-				td.alert(
-					cc.name,
-					fmt.Sprintf("%s has missed %d blocks on %s", cc.valInfo.Moniker, intVal(cc.Alerts.ConsecutiveMissed), cc.ChainId),
-					cc.Alerts.ConsecutivePriority,
-					true,
-					&alertID,
-				)
-				resolved = true
-			}
 		}
-		cc.activeAlerts = alarms.getCount(cc.name)
+	} else {
+		if alarms.exist(cc.name, alertID) {
+			// clear the alert
+			td.alert(
+				cc.name,
+				fmt.Sprintf("%s has missed %d blocks on %s", cc.valInfo.Moniker, intVal(cc.Alerts.ConsecutiveMissed), cc.ChainId),
+				cc.Alerts.ConsecutivePriority,
+				true,
+				&alertID,
+			)
+			resolved = true
+		}
 	}
+
+	cc.activeAlerts = alarms.getCount(cc.name)
 	return alert, resolved
 }
 
