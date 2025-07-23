@@ -1,13 +1,60 @@
 package tenderduty
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
 	"sync"
 	"testing"
 	"time"
+
+	gov "github.com/cosmos/cosmos-sdk/x/gov/types"
 )
+
+// Helper function to create test config with minimal required fields
+func createTestConfig() *Config {
+	falseBool := false
+	return &Config{
+		chainsMux: sync.RWMutex{},
+		Chains: map[string]*ChainConfig{
+			"test-chain": {
+				name:       "test-chain",
+				ChainId:    "test-chain-1",
+				ValAddress: "testval123",
+				Alerts: AlertConfig{
+					Pagerduty: PDConfig{
+						Enabled: &falseBool,
+					},
+					Discord: DiscordConfig{
+						Enabled: &falseBool,
+					},
+					Telegram: TeleConfig{
+						Enabled: &falseBool,
+					},
+					Slack: SlackConfig{
+						Enabled: &falseBool,
+					},
+				},
+			},
+		},
+		DefaultAlertConfig: AlertConfig{
+			Pagerduty: PDConfig{
+				Enabled: &falseBool,
+			},
+			Discord: DiscordConfig{
+				Enabled: &falseBool,
+			},
+			Telegram: TeleConfig{
+				Enabled: &falseBool,
+			},
+			Slack: SlackConfig{
+				Enabled: &falseBool,
+			},
+		},
+		alertChan: make(chan *alertMsg, 10),
+	}
+}
 
 func TestSeverityThresholdToSeverities(t *testing.T) {
 	tests := []struct {
@@ -651,5 +698,1075 @@ func TestChainConfigMkUpdate(t *testing.T) {
 	}
 	if update.endpoint != "http://node1.example.com" {
 		t.Errorf("Expected endpoint to be 'http://node1.example.com', got '%s'", update.endpoint)
+	}
+}
+
+func TestEvaluateConsecutiveBlocksMissedAlert(t *testing.T) {
+	// Setup test alarm cache
+	testAlarms := &alarmCache{
+		AllAlarms: make(map[string]map[string]alertMsgCache),
+		notifyMux: sync.RWMutex{},
+	}
+	originalAlarms := alarms
+	alarms = testAlarms
+	defer func() { alarms = originalAlarms }()
+
+	// Setup test td
+	originalTd := td
+	td = createTestConfig()
+	defer func() { td = originalTd }()
+
+	tests := []struct {
+		name                   string
+		consecutiveMiss        float64
+		consecutiveMissedAlert int
+		existingAlert          bool
+		expectedAlert          bool
+		expectedResolved       bool
+		description            string
+	}{
+		{
+			name:                   "should trigger alert when consecutive misses exceed threshold",
+			consecutiveMiss:        5,
+			consecutiveMissedAlert: 3,
+			existingAlert:          false,
+			expectedAlert:          true,
+			expectedResolved:       false,
+			description:            "Alert should trigger when consecutive misses exceed threshold",
+		},
+		{
+			name:                   "should not trigger duplicate alert",
+			consecutiveMiss:        5,
+			consecutiveMissedAlert: 3,
+			existingAlert:          true,
+			expectedAlert:          false,
+			expectedResolved:       false,
+			description:            "Should not trigger duplicate alert when already exists",
+		},
+		{
+			name:                   "should resolve alert when consecutive misses drop below threshold",
+			consecutiveMiss:        2,
+			consecutiveMissedAlert: 3,
+			existingAlert:          true,
+			expectedAlert:          false,
+			expectedResolved:       true,
+			description:            "Should resolve alert when consecutive misses drop below threshold",
+		},
+		{
+			name:                   "should not resolve non-existing alert",
+			consecutiveMiss:        2,
+			consecutiveMissedAlert: 3,
+			existingAlert:          false,
+			expectedAlert:          false,
+			expectedResolved:       false,
+			description:            "Should not resolve alert that doesn't exist",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Reset alarms for each test
+			testAlarms.AllAlarms = make(map[string]map[string]alertMsgCache)
+
+			cc := &ChainConfig{
+				name:                "test-chain",
+				ChainId:             "test-chain-1",
+				ValAddress:          "testval123",
+				statConsecutiveMiss: tt.consecutiveMiss,
+				valInfo:             &ValInfo{Moniker: "test-validator"},
+				Alerts: AlertConfig{
+					ConsecutiveMissed:   &tt.consecutiveMissedAlert,
+					ConsecutivePriority: "critical",
+				},
+			}
+
+			if tt.existingAlert {
+				testAlarms.AllAlarms["test-chain"] = make(map[string]alertMsgCache)
+				testAlarms.AllAlarms["test-chain"]["ConsecutiveBlocksMissed_testval123"] = alertMsgCache{
+					Message:  "test alert",
+					SentTime: time.Now(),
+				}
+			}
+
+			alert, resolved := evaluateConsecutiveBlocksMissedAlert(cc)
+
+			if alert != tt.expectedAlert {
+				t.Errorf("%s: expected alert %v, got %v", tt.description, tt.expectedAlert, alert)
+			}
+			if resolved != tt.expectedResolved {
+				t.Errorf("%s: expected resolved %v, got %v", tt.description, tt.expectedResolved, resolved)
+			}
+		})
+	}
+}
+
+func TestEvaluatePercentageBlocksMissedAlert(t *testing.T) {
+	// Setup test alarm cache
+	testAlarms := &alarmCache{
+		AllAlarms: make(map[string]map[string]alertMsgCache),
+		notifyMux: sync.RWMutex{},
+	}
+	originalAlarms := alarms
+	alarms = testAlarms
+	defer func() { alarms = originalAlarms }()
+
+	// Setup test td
+	originalTd := td
+	td = createTestConfig()
+	defer func() { td = originalTd }()
+
+	tests := []struct {
+		name             string
+		missed           int64
+		window           int64
+		windowThreshold  int
+		existingAlert    bool
+		expectedAlert    bool
+		expectedResolved bool
+		description      string
+	}{
+		{
+			name:             "should trigger alert when percentage exceeds threshold",
+			missed:           15,
+			window:           100,
+			windowThreshold:  10,
+			existingAlert:    false,
+			expectedAlert:    true,
+			expectedResolved: false,
+			description:      "Alert should trigger when missed percentage exceeds threshold",
+		},
+		{
+			name:             "should not trigger duplicate alert",
+			missed:           15,
+			window:           100,
+			windowThreshold:  10,
+			existingAlert:    true,
+			expectedAlert:    false,
+			expectedResolved: false,
+			description:      "Should not trigger duplicate alert when already exists",
+		},
+		{
+			name:             "should resolve alert when percentage drops below threshold",
+			missed:           5,
+			window:           100,
+			windowThreshold:  10,
+			existingAlert:    true,
+			expectedAlert:    false,
+			expectedResolved: true,
+			description:      "Should resolve alert when percentage drops below threshold",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Reset alarms for each test
+			testAlarms.AllAlarms = make(map[string]map[string]alertMsgCache)
+
+			cc := &ChainConfig{
+				name:       "test-chain",
+				ChainId:    "test-chain-1",
+				ValAddress: "testval123",
+				valInfo: &ValInfo{
+					Moniker: "test-validator",
+					Missed:  tt.missed,
+					Window:  tt.window,
+				},
+				Alerts: AlertConfig{
+					Window:             &tt.windowThreshold,
+					PercentagePriority: "warning",
+				},
+			}
+
+			if tt.existingAlert {
+				testAlarms.AllAlarms["test-chain"] = make(map[string]alertMsgCache)
+				testAlarms.AllAlarms["test-chain"]["PercentageBlocksMissed_testval123"] = alertMsgCache{
+					Message:  "test alert",
+					SentTime: time.Now(),
+				}
+			}
+
+			alert, resolved := evaluatePercentageBlocksMissedAlert(cc)
+
+			if alert != tt.expectedAlert {
+				t.Errorf("%s: expected alert %v, got %v", tt.description, tt.expectedAlert, alert)
+			}
+			if resolved != tt.expectedResolved {
+				t.Errorf("%s: expected resolved %v, got %v", tt.description, tt.expectedResolved, resolved)
+			}
+		})
+	}
+}
+
+func TestEvaluateChainStalledAlert(t *testing.T) {
+	// Setup test alarm cache
+	testAlarms := &alarmCache{
+		AllAlarms: make(map[string]map[string]alertMsgCache),
+		notifyMux: sync.RWMutex{},
+	}
+	originalAlarms := alarms
+	alarms = testAlarms
+	defer func() { alarms = originalAlarms }()
+
+	// Setup test td
+	originalTd := td
+	td = createTestConfig()
+	defer func() { td = originalTd }()
+
+	tests := []struct {
+		name             string
+		lastBlockTime    time.Time
+		stalledMinutes   int
+		lastBlockAlarm   bool
+		expectedAlert    bool
+		expectedResolved bool
+		description      string
+	}{
+		{
+			name:             "should trigger alert when chain is stalled",
+			lastBlockTime:    time.Now().Add(-15 * time.Minute),
+			stalledMinutes:   10,
+			lastBlockAlarm:   false,
+			expectedAlert:    true,
+			expectedResolved: false,
+			description:      "Should trigger alert when chain has been stalled longer than threshold",
+		},
+		{
+			name:             "should not trigger duplicate alert",
+			lastBlockTime:    time.Now().Add(-15 * time.Minute),
+			stalledMinutes:   10,
+			lastBlockAlarm:   true,
+			expectedAlert:    false,
+			expectedResolved: false,
+			description:      "Should not trigger duplicate alert when already alarmed",
+		},
+		{
+			name:             "should resolve alert when chain recovers",
+			lastBlockTime:    time.Now().Add(-5 * time.Minute),
+			stalledMinutes:   10,
+			lastBlockAlarm:   true,
+			expectedAlert:    false,
+			expectedResolved: true,
+			description:      "Should resolve alert when chain recovers from stall",
+		},
+		{
+			name:             "should handle zero lastBlockTime",
+			lastBlockTime:    time.Time{},
+			stalledMinutes:   10,
+			lastBlockAlarm:   false,
+			expectedAlert:    false,
+			expectedResolved: false,
+			description:      "Should handle zero lastBlockTime gracefully",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Reset alarms for each test
+			testAlarms.AllAlarms = make(map[string]map[string]alertMsgCache)
+
+			cc := &ChainConfig{
+				name:           "test-chain",
+				ChainId:        "test-chain-1",
+				ValAddress:     "testval123",
+				lastBlockTime:  tt.lastBlockTime,
+				lastBlockAlarm: tt.lastBlockAlarm,
+				Alerts: AlertConfig{
+					Stalled: &tt.stalledMinutes,
+				},
+			}
+
+			alert, resolved := evaluateChainStalledAlert(cc)
+
+			if alert != tt.expectedAlert {
+				t.Errorf("%s: expected alert %v, got %v", tt.description, tt.expectedAlert, alert)
+			}
+			if resolved != tt.expectedResolved {
+				t.Errorf("%s: expected resolved %v, got %v", tt.description, tt.expectedResolved, resolved)
+			}
+		})
+	}
+}
+
+func TestEvaluateValidatorInactiveAlert(t *testing.T) {
+	// Setup test alarm cache
+	testAlarms := &alarmCache{
+		AllAlarms: make(map[string]map[string]alertMsgCache),
+		notifyMux: sync.RWMutex{},
+	}
+	originalAlarms := alarms
+	alarms = testAlarms
+	defer func() { alarms = originalAlarms }()
+
+	// Setup test td
+	originalTd := td
+	td = createTestConfig()
+	defer func() { td = originalTd }()
+
+	tests := []struct {
+		name             string
+		currentBonded    bool
+		previousBonded   bool
+		tombstoned       bool
+		expectedAlert    bool
+		expectedResolved bool
+		description      string
+	}{
+		{
+			name:             "should trigger alert when validator becomes inactive",
+			currentBonded:    false,
+			previousBonded:   true,
+			tombstoned:       false,
+			expectedAlert:    true,
+			expectedResolved: false,
+			description:      "Should alert when validator becomes jailed",
+		},
+		{
+			name:             "should trigger alert when validator becomes tombstoned",
+			currentBonded:    false,
+			previousBonded:   true,
+			tombstoned:       true,
+			expectedAlert:    true,
+			expectedResolved: false,
+			description:      "Should alert when validator becomes tombstoned",
+		},
+		{
+			name:             "should resolve alert when validator becomes active",
+			currentBonded:    true,
+			previousBonded:   false,
+			tombstoned:       false,
+			expectedAlert:    false,
+			expectedResolved: true,
+			description:      "Should resolve alert when validator becomes active again",
+		},
+		{
+			name:             "should not alert if no state change",
+			currentBonded:    true,
+			previousBonded:   true,
+			tombstoned:       false,
+			expectedAlert:    false,
+			expectedResolved: false,
+			description:      "Should not alert if validator state hasn't changed",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Reset alarms for each test
+			testAlarms.AllAlarms = make(map[string]map[string]alertMsgCache)
+
+			cc := &ChainConfig{
+				name:       "test-chain",
+				ChainId:    "test-chain-1",
+				ValAddress: "testval123",
+				valInfo: &ValInfo{
+					Moniker:    "test-validator",
+					Bonded:     tt.currentBonded,
+					Tombstoned: tt.tombstoned,
+				},
+				lastValInfo: &ValInfo{
+					Moniker: "test-validator",
+					Bonded:  tt.previousBonded,
+				},
+			}
+
+			alert, resolved := evaluateValidatorInactiveAlert(cc)
+
+			if alert != tt.expectedAlert {
+				t.Errorf("%s: expected alert %v, got %v", tt.description, tt.expectedAlert, alert)
+			}
+			if resolved != tt.expectedResolved {
+				t.Errorf("%s: expected resolved %v, got %v", tt.description, tt.expectedResolved, resolved)
+			}
+		})
+	}
+}
+
+func TestEvaluateConsecutiveEmptyBlocksAlert(t *testing.T) {
+	// Setup test alarm cache
+	testAlarms := &alarmCache{
+		AllAlarms: make(map[string]map[string]alertMsgCache),
+		notifyMux: sync.RWMutex{},
+	}
+	originalAlarms := alarms
+	alarms = testAlarms
+	defer func() { alarms = originalAlarms }()
+
+	// Setup test td
+	originalTd := td
+	td = createTestConfig()
+	defer func() { td = originalTd }()
+
+	tests := []struct {
+		name                      string
+		consecutiveEmpty          float64
+		consecutiveEmptyThreshold int
+		existingAlert             bool
+		expectedAlert             bool
+		expectedResolved          bool
+		description               string
+	}{
+		{
+			name:                      "should trigger alert when consecutive empty blocks exceed threshold",
+			consecutiveEmpty:          5,
+			consecutiveEmptyThreshold: 3,
+			existingAlert:             false,
+			expectedAlert:             true,
+			expectedResolved:          false,
+			description:               "Should alert when consecutive empty blocks exceed threshold",
+		},
+		{
+			name:                      "should not trigger duplicate alert",
+			consecutiveEmpty:          5,
+			consecutiveEmptyThreshold: 3,
+			existingAlert:             true,
+			expectedAlert:             false,
+			expectedResolved:          false,
+			description:               "Should not trigger duplicate alert",
+		},
+		{
+			name:                      "should resolve alert when consecutive empty blocks drop below threshold",
+			consecutiveEmpty:          2,
+			consecutiveEmptyThreshold: 3,
+			existingAlert:             true,
+			expectedAlert:             false,
+			expectedResolved:          true,
+			description:               "Should resolve alert when consecutive empty blocks drop",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Reset alarms for each test
+			testAlarms.AllAlarms = make(map[string]map[string]alertMsgCache)
+
+			cc := &ChainConfig{
+				name:                 "test-chain",
+				ChainId:              "test-chain-1",
+				ValAddress:           "testval123",
+				statConsecutiveEmpty: tt.consecutiveEmpty,
+				valInfo:              &ValInfo{Moniker: "test-validator"},
+				Alerts: AlertConfig{
+					ConsecutiveEmpty:         &tt.consecutiveEmptyThreshold,
+					ConsecutiveEmptyPriority: "warning",
+				},
+			}
+
+			if tt.existingAlert {
+				testAlarms.AllAlarms["test-chain"] = make(map[string]alertMsgCache)
+				testAlarms.AllAlarms["test-chain"]["ConsecutiveEmptyBlocks_testval123"] = alertMsgCache{
+					Message:  "test alert",
+					SentTime: time.Now(),
+				}
+			}
+
+			alert, resolved := evaluateConsecutiveEmptyBlocksAlert(cc)
+
+			if alert != tt.expectedAlert {
+				t.Errorf("%s: expected alert %v, got %v", tt.description, tt.expectedAlert, alert)
+			}
+			if resolved != tt.expectedResolved {
+				t.Errorf("%s: expected resolved %v, got %v", tt.description, tt.expectedResolved, resolved)
+			}
+		})
+	}
+}
+
+func TestEvaluatePercentageEmptyBlocksAlert(t *testing.T) {
+	// Setup test alarm cache
+	testAlarms := &alarmCache{
+		AllAlarms: make(map[string]map[string]alertMsgCache),
+		notifyMux: sync.RWMutex{},
+	}
+	originalAlarms := alarms
+	alarms = testAlarms
+	defer func() { alarms = originalAlarms }()
+
+	// Setup test td
+	originalTd := td
+	td = createTestConfig()
+	defer func() { td = originalTd }()
+
+	tests := []struct {
+		name                 string
+		totalProps           float64
+		totalPropsEmpty      float64
+		emptyWindowThreshold int
+		existingAlert        bool
+		expectedAlert        bool
+		expectedResolved     bool
+		description          string
+	}{
+		{
+			name:                 "should trigger alert when empty percentage exceeds threshold",
+			totalProps:           100,
+			totalPropsEmpty:      15,
+			emptyWindowThreshold: 10,
+			existingAlert:        false,
+			expectedAlert:        true,
+			expectedResolved:     false,
+			description:          "Should alert when empty block percentage exceeds threshold",
+		},
+		{
+			name:                 "should not trigger duplicate alert",
+			totalProps:           100,
+			totalPropsEmpty:      15,
+			emptyWindowThreshold: 10,
+			existingAlert:        true,
+			expectedAlert:        false,
+			expectedResolved:     false,
+			description:          "Should not trigger duplicate alert",
+		},
+		{
+			name:                 "should resolve alert when percentage drops below threshold",
+			totalProps:           100,
+			totalPropsEmpty:      5,
+			emptyWindowThreshold: 10,
+			existingAlert:        true,
+			expectedAlert:        false,
+			expectedResolved:     true,
+			description:          "Should resolve alert when percentage drops below threshold",
+		},
+		{
+			name:                 "should handle zero total props",
+			totalProps:           0,
+			totalPropsEmpty:      0,
+			emptyWindowThreshold: 10,
+			existingAlert:        false,
+			expectedAlert:        false,
+			expectedResolved:     false,
+			description:          "Should handle zero total props gracefully",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Reset alarms for each test
+			testAlarms.AllAlarms = make(map[string]map[string]alertMsgCache)
+
+			cc := &ChainConfig{
+				name:                "test-chain",
+				ChainId:             "test-chain-1",
+				ValAddress:          "testval123",
+				statTotalProps:      tt.totalProps,
+				statTotalPropsEmpty: tt.totalPropsEmpty,
+				valInfo:             &ValInfo{Moniker: "test-validator"},
+				Alerts: AlertConfig{
+					EmptyWindow:             &tt.emptyWindowThreshold,
+					EmptyPercentagePriority: "warning",
+				},
+			}
+
+			if tt.existingAlert {
+				testAlarms.AllAlarms["test-chain"] = make(map[string]alertMsgCache)
+				testAlarms.AllAlarms["test-chain"]["PercentageEmptyBlocks_testval123"] = alertMsgCache{
+					Message:  "test alert",
+					SentTime: time.Now(),
+				}
+			}
+
+			alert, resolved := evaluatePercentageEmptyBlocksAlert(cc)
+
+			if alert != tt.expectedAlert {
+				t.Errorf("%s: expected alert %v, got %v", tt.description, tt.expectedAlert, alert)
+			}
+			if resolved != tt.expectedResolved {
+				t.Errorf("%s: expected resolved %v, got %v", tt.description, tt.expectedResolved, resolved)
+			}
+		})
+	}
+}
+
+func TestEvaluateNoRPCEndpointsAlert(t *testing.T) {
+	// Setup test alarm cache
+	testAlarms := &alarmCache{
+		AllAlarms: make(map[string]map[string]alertMsgCache),
+		notifyMux: sync.RWMutex{},
+	}
+	originalAlarms := alarms
+	alarms = testAlarms
+	defer func() { alarms = originalAlarms }()
+
+	// Setup test td
+	originalTd := td
+	td = createTestConfig()
+	td.NodeDownMin = 1
+	td.NodeDownSeverity = "warning"
+	defer func() { td = originalTd }()
+
+	tests := []struct {
+		name               string
+		noNodes            bool
+		noNodesSec         int
+		existingAlert      bool
+		expectedAlert      bool
+		expectedResolved   bool
+		expectedNoNodesSec int
+		description        string
+	}{
+		{
+			name:               "should not trigger if node is down but not for enough waiting time",
+			noNodes:            true,
+			noNodesSec:         0,
+			existingAlert:      false,
+			expectedAlert:      false,
+			expectedResolved:   false,
+			expectedNoNodesSec: 2,
+			description:        "Should not alert when nodes have been down shorter than threshold",
+		},
+		{
+			name:               "should trigger when node is down for enough waiting time",
+			noNodes:            true,
+			noNodesSec:         60, // in this test we have set td.NodeDownMin = 1
+			existingAlert:      false,
+			expectedAlert:      true,
+			expectedResolved:   false,
+			expectedNoNodesSec: 62, // evaluation is done every 2 seconds
+			description:        "Should alert when nodes have been down longer than threshold",
+		},
+		{
+			name:               "should not trigger duplicate alert",
+			noNodes:            true,
+			noNodesSec:         120,
+			existingAlert:      true,
+			expectedAlert:      false,
+			expectedResolved:   false,
+			expectedNoNodesSec: 122,
+			description:        "Should not trigger duplicate alert",
+		},
+		{
+			name:               "should resolve alert when nodes recover",
+			noNodes:            false,
+			noNodesSec:         120,
+			existingAlert:      true,
+			expectedAlert:      false,
+			expectedResolved:   true,
+			expectedNoNodesSec: 0,
+			description:        "Should resolve alert when nodes recover",
+		},
+		{
+			name:               "should increment counter when nodes still down but below threshold",
+			noNodes:            true,
+			noNodesSec:         30,
+			existingAlert:      false,
+			expectedAlert:      false,
+			expectedResolved:   false,
+			expectedNoNodesSec: 32,
+			description:        "Should increment counter but not alert when below threshold",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Reset alarms for each test
+			testAlarms.AllAlarms = make(map[string]map[string]alertMsgCache)
+
+			cc := &ChainConfig{
+				name:       "test-chain",
+				ChainId:    "test-chain-1",
+				ValAddress: "testval123",
+				noNodes:    tt.noNodes,
+			}
+
+			if tt.existingAlert {
+				testAlarms.AllAlarms["test-chain"] = make(map[string]alertMsgCache)
+				testAlarms.AllAlarms["test-chain"]["NoRPCEndpoints_testval123"] = alertMsgCache{
+					Message:  "test alert",
+					SentTime: time.Now(),
+				}
+			}
+
+			noNodesSec := tt.noNodesSec
+			alert, resolved := evaluateNoRPCEndpointsAlert(cc, &noNodesSec)
+
+			if alert != tt.expectedAlert {
+				t.Errorf("%s: expected alert %v, got %v", tt.description, tt.expectedAlert, alert)
+			}
+			if resolved != tt.expectedResolved {
+				t.Errorf("%s: expected resolved %v, got %v", tt.description, tt.expectedResolved, resolved)
+			}
+			if noNodesSec != tt.expectedNoNodesSec {
+				t.Errorf("%s: expected noNodesSec %d, got %d", tt.description, tt.expectedNoNodesSec, noNodesSec)
+			}
+		})
+	}
+}
+
+func TestEvaluateRPCNodeDownAlert(t *testing.T) {
+	// Setup test alarm cache
+	testAlarms := &alarmCache{
+		AllAlarms: make(map[string]map[string]alertMsgCache),
+		notifyMux: sync.RWMutex{},
+	}
+	originalAlarms := alarms
+	alarms = testAlarms
+	defer func() { alarms = originalAlarms }()
+
+	// Setup test td
+	originalTd := td
+	td = createTestConfig()
+	td.NodeDownMin = 2
+	td.NodeDownSeverity = "warning"
+	defer func() { td = originalTd }()
+
+	tests := []struct {
+		name             string
+		nodes            []*NodeConfig
+		existingAlert    bool
+		expectedAlert    bool
+		expectedResolved bool
+		description      string
+	}{
+		{
+			name: "should trigger alert when node is down longer than threshold",
+			nodes: []*NodeConfig{
+				{
+					Url:         "http://node1.example.com",
+					AlertIfDown: true,
+					down:        true,
+					wasDown:     false,
+					downSince:   time.Now().Add(-5 * time.Minute),
+				},
+			},
+			existingAlert:    false,
+			expectedAlert:    true,
+			expectedResolved: false,
+			description:      "Should alert when node is down longer than threshold",
+		},
+		{
+			name: "should not trigger duplicate alert",
+			nodes: []*NodeConfig{
+				{
+					Url:         "http://node1.example.com",
+					AlertIfDown: true,
+					down:        true,
+					wasDown:     false,
+					downSince:   time.Now().Add(-5 * time.Minute),
+				},
+			},
+			existingAlert:    true,
+			expectedAlert:    false,
+			expectedResolved: false,
+			description:      "Should not trigger duplicate alert",
+		},
+		{
+			name: "should resolve alert when node recovers",
+			nodes: []*NodeConfig{
+				{
+					Url:         "http://node1.example.com",
+					AlertIfDown: true,
+					down:        false,
+					wasDown:     true,
+					downSince:   time.Now().Add(-5 * time.Minute),
+				},
+			},
+			existingAlert:    true,
+			expectedAlert:    false,
+			expectedResolved: true,
+			description:      "Should resolve alert when node recovers",
+		},
+		{
+			name: "should not alert if AlertIfDown is false",
+			nodes: []*NodeConfig{
+				{
+					Url:         "http://node1.example.com",
+					AlertIfDown: false,
+					down:        true,
+					wasDown:     false,
+					downSince:   time.Now().Add(-5 * time.Minute),
+				},
+			},
+			existingAlert:    false,
+			expectedAlert:    false,
+			expectedResolved: false,
+			description:      "Should not alert if AlertIfDown is disabled",
+		},
+		{
+			name: "should not alert if node just went down",
+			nodes: []*NodeConfig{
+				{
+					Url:         "http://node1.example.com",
+					AlertIfDown: true,
+					down:        true,
+					wasDown:     false,
+					downSince:   time.Now().Add(-30 * time.Second),
+				},
+			},
+			existingAlert:    false,
+			expectedAlert:    false,
+			expectedResolved: false,
+			description:      "Should not alert if node hasn't been down long enough",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Reset alarms for each test
+			testAlarms.AllAlarms = make(map[string]map[string]alertMsgCache)
+
+			cc := &ChainConfig{
+				name:       "test-chain",
+				ChainId:    "test-chain-1",
+				ValAddress: "testval123",
+				Nodes:      tt.nodes,
+			}
+
+			if tt.existingAlert && len(tt.nodes) > 0 {
+				testAlarms.AllAlarms["test-chain"] = make(map[string]alertMsgCache)
+				alertID := fmt.Sprintf("RPCNodeDown_%s_%s", cc.ValAddress, tt.nodes[0].Url)
+				testAlarms.AllAlarms["test-chain"][alertID] = alertMsgCache{
+					Message:  "test alert",
+					SentTime: time.Now(),
+				}
+			}
+
+			alert, resolved := evaluateRPCNodeDownAlert(cc)
+
+			if alert != tt.expectedAlert {
+				t.Errorf("%s: expected alert %v, got %v", tt.description, tt.expectedAlert, alert)
+			}
+			if resolved != tt.expectedResolved {
+				t.Errorf("%s: expected resolved %v, got %v", tt.description, tt.expectedResolved, resolved)
+			}
+		})
+	}
+}
+
+func TestEvaluateStakeChangeAlert(t *testing.T) {
+	// Setup test alarm cache
+	testAlarms := &alarmCache{
+		AllAlarms: make(map[string]map[string]alertMsgCache),
+		notifyMux: sync.RWMutex{},
+	}
+	originalAlarms := alarms
+	alarms = testAlarms
+	defer func() { alarms = originalAlarms }()
+
+	// Setup test td
+	originalTd := td
+	td = createTestConfig()
+	defer func() { td = originalTd }()
+
+	tests := []struct {
+		name              string
+		currentStake      float64
+		previousStake     float64
+		increaseThreshold float64
+		dropThreshold     float64
+		existingAlert     bool
+		expectedAlert     bool
+		expectedResolved  bool
+		description       string
+	}{
+		{
+			name:              "should trigger alert when stake increases above threshold",
+			currentStake:      1200.0,
+			previousStake:     1000.0,
+			increaseThreshold: 0.15,
+			dropThreshold:     0.10,
+			existingAlert:     false,
+			expectedAlert:     true,
+			expectedResolved:  false,
+			description:       "Should alert when stake increases by more than 15%",
+		},
+		{
+			name:              "should trigger alert when stake drops below threshold",
+			currentStake:      800.0,
+			previousStake:     1000.0,
+			increaseThreshold: 0.15,
+			dropThreshold:     0.15,
+			existingAlert:     false,
+			expectedAlert:     true,
+			expectedResolved:  false,
+			description:       "Should alert when stake drops by more than 15%",
+		},
+		{
+			name:              "should not trigger duplicate alert",
+			currentStake:      1200.0,
+			previousStake:     1000.0,
+			increaseThreshold: 0.15,
+			dropThreshold:     0.10,
+			existingAlert:     true,
+			expectedAlert:     false,
+			expectedResolved:  false,
+			description:       "Should not trigger duplicate alert",
+		},
+		{
+			name:              "should resolve alert when stake change is within threshold",
+			currentStake:      1050.0,
+			previousStake:     1000.0,
+			increaseThreshold: 0.10,
+			dropThreshold:     0.10,
+			existingAlert:     true,
+			expectedAlert:     false,
+			expectedResolved:  true,
+			description:       "Should resolve alert when stake change is within acceptable range",
+		},
+		{
+			name:              "should not alert when change is within threshold",
+			currentStake:      1050.0,
+			previousStake:     1000.0,
+			increaseThreshold: 0.10,
+			dropThreshold:     0.10,
+			existingAlert:     false,
+			expectedAlert:     false,
+			expectedResolved:  false,
+			description:       "Should not alert when stake change is within threshold",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Reset alarms for each test
+			testAlarms.AllAlarms = make(map[string]map[string]alertMsgCache)
+
+			cc := &ChainConfig{
+				name:       "test-chain",
+				ChainId:    "test-chain-1",
+				ValAddress: "testval123",
+				valInfo: &ValInfo{
+					Moniker:         "test-validator",
+					DelegatedTokens: tt.currentStake,
+				},
+				lastValInfo: &ValInfo{
+					DelegatedTokens: tt.previousStake,
+				},
+				Alerts: AlertConfig{
+					StakeChangeIncreaseThreshold: &tt.increaseThreshold,
+					StakeChangeDropThreshold:     &tt.dropThreshold,
+				},
+			}
+
+			if tt.existingAlert {
+				testAlarms.AllAlarms["test-chain"] = make(map[string]alertMsgCache)
+				testAlarms.AllAlarms["test-chain"]["StakeChange_testval123"] = alertMsgCache{
+					Message:  "test alert",
+					SentTime: time.Now(),
+				}
+			}
+
+			alert, resolved := evaluateStakeChangeAlert(cc)
+
+			if alert != tt.expectedAlert {
+				t.Errorf("%s: expected alert %v, got %v", tt.description, tt.expectedAlert, alert)
+			}
+			if resolved != tt.expectedResolved {
+				t.Errorf("%s: expected resolved %v, got %v", tt.description, tt.expectedResolved, resolved)
+			}
+		})
+	}
+}
+
+func TestEvaluateUnvotedGovernanceProposalAlert(t *testing.T) {
+	// Setup test alarm cache
+	testAlarms := &alarmCache{
+		AllAlarms: make(map[string]map[string]alertMsgCache),
+		notifyMux: sync.RWMutex{},
+	}
+	originalAlarms := alarms
+	alarms = testAlarms
+	defer func() { alarms = originalAlarms }()
+
+	// Setup test td
+	originalTd := td
+	td = createTestConfig()
+	defer func() { td = originalTd }()
+
+	tests := []struct {
+		name             string
+		unvotedProposals []gov.Proposal
+		existingAlerts   map[string]bool
+		expectedAlert    bool
+		expectedResolved bool
+		description      string
+	}{
+		{
+			name: "should trigger alert for new unvoted proposal",
+			unvotedProposals: []gov.Proposal{
+				{
+					ProposalId:    1,
+					VotingEndTime: time.Now().Add(24 * time.Hour),
+				},
+			},
+			existingAlerts:   map[string]bool{},
+			expectedAlert:    true,
+			expectedResolved: false,
+			description:      "Should alert for new unvoted governance proposal",
+		},
+		{
+			name: "should not trigger duplicate alert",
+			unvotedProposals: []gov.Proposal{
+				{
+					ProposalId:    1,
+					VotingEndTime: time.Now().Add(24 * time.Hour),
+				},
+			},
+			existingAlerts: map[string]bool{
+				"UnvotedGovernanceProposal_testval123_1": true,
+			},
+			expectedAlert:    false,
+			expectedResolved: false,
+			description:      "Should not trigger duplicate alert for same proposal",
+		},
+		{
+			name:             "should resolve alert when proposal is voted on",
+			unvotedProposals: []gov.Proposal{},
+			existingAlerts: map[string]bool{
+				"UnvotedGovernanceProposal_testval123_1": true,
+			},
+			expectedAlert:    false,
+			expectedResolved: true,
+			description:      "Should resolve alert when proposal is no longer unvoted",
+		},
+		{
+			name: "should handle multiple proposals",
+			unvotedProposals: []gov.Proposal{
+				{
+					ProposalId:    1,
+					VotingEndTime: time.Now().Add(24 * time.Hour),
+				},
+				{
+					ProposalId:    2,
+					VotingEndTime: time.Now().Add(48 * time.Hour),
+				},
+			},
+			existingAlerts:   map[string]bool{},
+			expectedAlert:    true,
+			expectedResolved: false,
+			description:      "Should handle multiple unvoted proposals",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Reset alarms for each test
+			testAlarms.AllAlarms = make(map[string]map[string]alertMsgCache)
+
+			if len(tt.existingAlerts) > 0 {
+				testAlarms.AllAlarms["test-chain"] = make(map[string]alertMsgCache)
+				for alertID := range tt.existingAlerts {
+					testAlarms.AllAlarms["test-chain"][alertID] = alertMsgCache{
+						Message:  "test governance alert",
+						SentTime: time.Now(),
+					}
+				}
+			}
+
+			cc := &ChainConfig{
+				name:                    "test-chain",
+				ChainId:                 "test-chain-1",
+				ValAddress:              "testval123",
+				unvotedOpenGovProposals: tt.unvotedProposals,
+				Provider:                ProviderConfig{Name: "cosmos"},
+			}
+
+			alert, resolved := evaluateUnvotedGovernanceProposalAlert(cc)
+
+			if alert != tt.expectedAlert {
+				t.Errorf("%s: expected alert %v, got %v", tt.description, tt.expectedAlert, alert)
+			}
+			if resolved != tt.expectedResolved {
+				t.Errorf("%s: expected resolved %v, got %v", tt.description, tt.expectedResolved, resolved)
+			}
+		})
 	}
 }

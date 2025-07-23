@@ -504,6 +504,7 @@ func evaluatePercentageBlocksMissedAlert(cc *ChainConfig) (bool, bool) {
 				false,
 				&alertID,
 			)
+			alert = true
 		}
 	} else {
 		if alarms.exist(cc.name, alertID) {
@@ -514,6 +515,7 @@ func evaluatePercentageBlocksMissedAlert(cc *ChainConfig) (bool, bool) {
 				true,
 				&alertID,
 			)
+			resolved = true
 		}
 	}
 
