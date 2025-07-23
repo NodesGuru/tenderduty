@@ -8,7 +8,6 @@ import (
 	"log"
 	"math"
 	"net/http"
-	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -17,6 +16,7 @@ import (
 
 	"github.com/PagerDuty/go-pagerduty"
 	github_com_cosmos_cosmos_sdk_types "github.com/cosmos/cosmos-sdk/types"
+	"github.com/firstset/tenderduty/v2/td2/utils"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
@@ -55,13 +55,20 @@ const (
 	slk
 )
 
+type alertMsgCache struct {
+	Message  string    `json:"message"`
+	SentTime time.Time `json:"sent_time"`
+}
+
 type alarmCache struct {
-	SentPdAlarms   map[string]time.Time            `json:"sent_pd_alarms"`
-	SentTgAlarms   map[string]time.Time            `json:"sent_tg_alarms"`
-	SentDiAlarms   map[string]time.Time            `json:"sent_di_alarms"`
-	SentSlkAlarms  map[string]time.Time            `json:"sent_slk_alarms"`
-	AllAlarms      map[string]map[string]time.Time `json:"sent_all_alarms"`
-	flappingAlarms map[string]map[string]time.Time
+	// the key of an alertMsgCache is the unique ID of the alert
+	// we use the following convention for the unique ID: <alert_name>_<val_address>_<other_info>
+	SentPdAlarms   map[string]alertMsgCache            `json:"sent_pd_alarms"`
+	SentTgAlarms   map[string]alertMsgCache            `json:"sent_tg_alarms"`
+	SentDiAlarms   map[string]alertMsgCache            `json:"sent_di_alarms"`
+	SentSlkAlarms  map[string]alertMsgCache            `json:"sent_slk_alarms"`
+	AllAlarms      map[string]map[string]alertMsgCache `json:"sent_all_alarms"`
+	flappingAlarms map[string]map[string]alertMsgCache
 	notifyMux      sync.RWMutex
 }
 
@@ -70,13 +77,14 @@ func (a *alarmCache) clearNoBlocks(cc *ChainConfig) {
 		return
 	}
 	for clearAlarm := range a.AllAlarms[cc.name] {
-		if strings.HasPrefix(clearAlarm, "stalled: have not seen a new block on") {
+		if strings.HasPrefix(clearAlarm, "ChainStalled") {
+			alertID := fmt.Sprintf("ChainStalled_%s", cc.ValAddress)
 			td.alert(
 				cc.name,
 				fmt.Sprintf("stalled: have not seen a new block on %s in %d minutes", cc.ChainId, intVal(cc.Alerts.Stalled)),
 				"critical",
 				true,
-				&cc.valInfo.Valcons,
+				&alertID,
 			)
 		}
 	}
@@ -97,24 +105,35 @@ func (a *alarmCache) clearAll(chain string) {
 	}
 	a.notifyMux.Lock()
 	defer a.notifyMux.Unlock()
-	a.AllAlarms[chain] = make(map[string]time.Time)
+	a.AllAlarms[chain] = make(map[string]alertMsgCache)
+}
+
+func (a *alarmCache) exist(chain string, alertID string) bool {
+	if a.AllAlarms == nil || a.AllAlarms[chain] == nil {
+		return false
+	}
+	a.notifyMux.RLock()
+	defer a.notifyMux.RUnlock()
+
+	_, ok := alarms.AllAlarms[chain][alertID]
+	return ok
 }
 
 // alarms is used to prevent double notifications. TODO: save on exit / load on start
 var alarms = &alarmCache{
-	SentPdAlarms:   make(map[string]time.Time),
-	SentTgAlarms:   make(map[string]time.Time),
-	SentDiAlarms:   make(map[string]time.Time),
-	SentSlkAlarms:  make(map[string]time.Time),
-	AllAlarms:      make(map[string]map[string]time.Time),
-	flappingAlarms: make(map[string]map[string]time.Time),
+	SentPdAlarms:   make(map[string]alertMsgCache),
+	SentTgAlarms:   make(map[string]alertMsgCache),
+	SentDiAlarms:   make(map[string]alertMsgCache),
+	SentSlkAlarms:  make(map[string]alertMsgCache),
+	AllAlarms:      make(map[string]map[string]alertMsgCache),
+	flappingAlarms: make(map[string]map[string]alertMsgCache),
 	notifyMux:      sync.RWMutex{},
 }
 
 func shouldNotify(msg *alertMsg, dest notifyDest) bool {
 	alarms.notifyMux.Lock()
 	defer alarms.notifyMux.Unlock()
-	var whichMap map[string]time.Time
+	var whichMap map[string]alertMsgCache
 	var service string
 	switch dest {
 	case pd:
@@ -144,21 +163,25 @@ func shouldNotify(msg *alertMsg, dest notifyDest) bool {
 	}
 
 	switch {
-	case !whichMap[msg.message].IsZero() && !msg.resolved:
+	case !whichMap[msg.uniqueId].SentTime.IsZero() && !msg.resolved:
 		// TODO: this is a temporary solution for sending proposal reminders, ideally we should make this feature more general and configurable
 		// Check if this is a proposal alert that should be re-sent
-		if strings.Contains(strings.ToLower(msg.message), "open proposal") {
+		if strings.HasPrefix(msg.uniqueId, "UnvotedGovernanceProposal") {
 			// Check if it has been 6 hours since the last (re-)send
-			if whichMap[msg.message].Before(time.Now().Add(-1 * time.Duration(td.GovernanceAlertsReminderInterval) * time.Hour)) {
+			if whichMap[msg.uniqueId].SentTime.Before(time.Now().Add(-1 * time.Duration(td.GovernanceAlertsReminderInterval) * time.Hour)) {
 				l(fmt.Sprintf("🔄 RE-SENDING ALERT on %s (%s) - notifying %s", msg.chain, msg.message, service))
-				whichMap[msg.message] = time.Now()
+				cache := alertMsgCache{
+					Message:  msg.message,
+					SentTime: time.Now(),
+				}
+				whichMap[msg.uniqueId] = cache
 				return true
 			}
 		}
 		return false
-	case !whichMap[msg.message].IsZero() && msg.resolved:
+	case !whichMap[msg.uniqueId].SentTime.IsZero() && msg.resolved:
 		// alarm is cleared
-		delete(whichMap, msg.message)
+		delete(whichMap, msg.uniqueId)
 		l(fmt.Sprintf("💜 Resolved     alarm on %s (%s) - notifying %s", msg.chain, msg.message, service))
 		return true
 	case msg.resolved:
@@ -169,19 +192,27 @@ func shouldNotify(msg *alertMsg, dest notifyDest) bool {
 
 	// check if the alarm is flapping, if we sent the same alert in the last five minutes, show a warning but don't alert
 	if alarms.flappingAlarms[msg.chain] == nil {
-		alarms.flappingAlarms[msg.chain] = make(map[string]time.Time)
+		alarms.flappingAlarms[msg.chain] = make(map[string]alertMsgCache)
 	}
 
 	// for pagerduty we perform some basic flap detection
-	if dest == pd && msg.pd && alarms.flappingAlarms[msg.chain][msg.message].After(time.Now().Add(-5*time.Minute)) {
+	if dest == pd && msg.pd && alarms.flappingAlarms[msg.chain][msg.uniqueId].SentTime.After(time.Now().Add(-5*time.Minute)) {
 		l("🛑 flapping detected - suppressing pagerduty notification:", msg.chain, msg.message)
 		return false
 	} else if dest == pd && msg.pd {
-		alarms.flappingAlarms[msg.chain][msg.message] = time.Now()
+		cache := alertMsgCache{
+			Message:  msg.message,
+			SentTime: time.Now(),
+		}
+		alarms.flappingAlarms[msg.chain][msg.uniqueId] = cache
 	}
 
 	l(fmt.Sprintf("🚨 ALERT        new alarm on %s (%s) - notifying %s", msg.chain, msg.message, service))
-	whichMap[msg.message] = time.Now()
+	cache := alertMsgCache{
+		Message:  msg.message,
+		SentTime: time.Now(),
+	}
+	whichMap[msg.uniqueId] = cache
 	return true
 }
 
@@ -375,16 +406,15 @@ func getAlarms(chain string) string {
 	}
 	result := ""
 	for k := range alarms.AllAlarms[chain] {
-		result += "🚨 " + k + "\n"
+		result += "🚨 " + alarms.AllAlarms[chain][k].Message + "\n"
 	}
 	return result
 }
 
 // alert creates a universal alert and pushes it to the alertChan to be delivered to appropriate services
 func (c *Config) alert(chainName, message, severity string, resolved bool, id *string) {
-	uniq := c.Chains[chainName].ValAddress
-	if id != nil {
-		uniq = *id
+	if id == nil {
+		return
 	}
 	c.chainsMux.RLock()
 	a := &alertMsg{
@@ -396,7 +426,7 @@ func (c *Config) alert(chainName, message, severity string, resolved bool, id *s
 		resolved:     resolved,
 		chain:        fmt.Sprintf("%s (%s)", chainName, c.Chains[chainName].ChainId),
 		message:      message,
-		uniqueId:     uniq,
+		uniqueId:     *id,
 		key:          c.Chains[chainName].Alerts.Pagerduty.ApiKey,
 		tgChannel:    c.Chains[chainName].Alerts.Telegram.Channel,
 		tgKey:        c.Chains[chainName].Alerts.Telegram.ApiKey,
@@ -411,39 +441,499 @@ func (c *Config) alert(chainName, message, severity string, resolved bool, id *s
 	alarms.notifyMux.Lock()
 	defer alarms.notifyMux.Unlock()
 	if alarms.AllAlarms[chainName] == nil {
-		alarms.AllAlarms[chainName] = make(map[string]time.Time)
+		alarms.AllAlarms[chainName] = make(map[string]alertMsgCache)
 	}
-	if resolved && !alarms.AllAlarms[chainName][message].IsZero() {
-		delete(alarms.AllAlarms[chainName], message)
+	if resolved && !alarms.AllAlarms[chainName][*id].SentTime.IsZero() {
+		delete(alarms.AllAlarms[chainName], *id)
 		return
 	} else if resolved {
 		return
 	}
-	alarms.AllAlarms[chainName][message] = time.Now()
+	cache := alertMsgCache{
+		Message:  message,
+		SentTime: time.Now(),
+	}
+	alarms.AllAlarms[chainName][*id] = cache
+}
+
+func evaluateConsecutiveBlocksMissedAlert(cc *ChainConfig) (bool, bool) {
+	alert, resolved := false, false
+
+	alertID := fmt.Sprintf("ConsecutiveBlocksMissed_%s", cc.ValAddress)
+	if int(cc.statConsecutiveMiss) >= intVal(cc.Alerts.ConsecutiveMissed) {
+		if !alarms.exist(cc.name, alertID) {
+			// alert on missed block counter!
+			td.alert(
+				cc.name,
+				fmt.Sprintf("%s has missed %d blocks on %s", cc.valInfo.Moniker, intVal(cc.Alerts.ConsecutiveMissed), cc.ChainId),
+				cc.Alerts.ConsecutivePriority,
+				false,
+				&alertID,
+			)
+			alert = true
+		}
+	} else {
+		if alarms.exist(cc.name, alertID) {
+			// clear the alert
+			td.alert(
+				cc.name,
+				fmt.Sprintf("%s has missed %d blocks on %s", cc.valInfo.Moniker, intVal(cc.Alerts.ConsecutiveMissed), cc.ChainId),
+				cc.Alerts.ConsecutivePriority,
+				true,
+				&alertID,
+			)
+			resolved = true
+		}
+	}
+
+	cc.activeAlerts = alarms.getCount(cc.name)
+	return alert, resolved
+}
+
+func evaluatePercentageBlocksMissedAlert(cc *ChainConfig) (bool, bool) {
+	alert, resolved := false, false
+
+	alertID := fmt.Sprintf("PercentageBlocksMissed_%s", cc.ValAddress)
+	if 100*float64(cc.valInfo.Missed)/float64(cc.valInfo.Window) >= float64(intVal(cc.Alerts.Window)) {
+		if !alarms.exist(cc.name, alertID) {
+			// alert on missed block counter!
+			td.alert(
+				cc.name,
+				fmt.Sprintf("%s has missed > %d%% of the slashing window's blocks on %s", cc.valInfo.Moniker, intVal(cc.Alerts.Window), cc.ChainId),
+				cc.Alerts.PercentagePriority,
+				false,
+				&alertID,
+			)
+			alert = true
+		}
+	} else {
+		if alarms.exist(cc.name, alertID) {
+			td.alert(
+				cc.name,
+				fmt.Sprintf("%s has missed > %d%% of the slashing window's blocks on %s", cc.valInfo.Moniker, intVal(cc.Alerts.Window), cc.ChainId),
+				cc.Alerts.PercentagePriority,
+				true,
+				&alertID,
+			)
+			resolved = true
+		}
+	}
+
+	cc.activeAlerts = alarms.getCount(cc.name)
+	return alert, resolved
+}
+
+func evaluateNoRPCEndpointsAlert(cc *ChainConfig, noNodesSec *int) (bool, bool) {
+	alert, resolved := false, false
+
+	alertID := fmt.Sprintf("NoRPCEndpoints_%s", cc.ValAddress)
+	if cc.noNodes {
+		*noNodesSec += 2
+		if *noNodesSec <= 60*td.NodeDownMin {
+			if *noNodesSec%20 == 0 {
+				l(fmt.Sprintf("no nodes available on %s for %d seconds, deferring alarm", cc.ChainId, *noNodesSec))
+			}
+		} else {
+			if !alarms.exist(cc.name, alertID) {
+				td.alert(
+					cc.name,
+					fmt.Sprintf("no RPC endpoints are working for %s", cc.ChainId),
+					"critical",
+					false,
+					&alertID,
+				)
+				alert = true
+			}
+		}
+	} else {
+		if alarms.exist(cc.name, alertID) {
+			td.alert(
+				cc.name,
+				fmt.Sprintf("no RPC endpoints are working for %s", cc.ChainId),
+				"critical",
+				true,
+				&alertID,
+			)
+			resolved = true
+		}
+		*noNodesSec = 0
+	}
+
+	cc.activeAlerts = alarms.getCount(cc.name)
+	return alert, resolved
+}
+
+func evaluateChainStalledAlert(cc *ChainConfig) (bool, bool) {
+	alert, resolved := false, false
+
+	if !cc.lastBlockTime.IsZero() {
+		alertID := fmt.Sprintf("ChainStalled_%s", cc.ValAddress)
+		if !cc.lastBlockAlarm && cc.lastBlockTime.Before(time.Now().Add(time.Duration(-intVal(cc.Alerts.Stalled))*time.Minute)) {
+			cc.lastBlockAlarm = true
+			td.alert(
+				cc.name,
+				fmt.Sprintf("stalled: have not seen a new block on %s in %d minutes", cc.ChainId, intVal(cc.Alerts.Stalled)),
+				"critical",
+				false,
+				&alertID,
+			)
+			alert = true
+		} else if !cc.lastBlockTime.Before(time.Now().Add(time.Duration(-intVal(cc.Alerts.Stalled)) * time.Minute)) {
+			alarms.clearNoBlocks(cc)
+			cc.lastBlockAlarm = false
+			resolved = true
+		}
+		cc.activeAlerts = alarms.getCount(cc.name)
+	}
+
+	return alert, resolved
+}
+
+func evaluateValidatorInactiveAlert(cc *ChainConfig) (bool, bool) {
+	alert, resolved := false, false
+
+	if cc.lastValInfo != nil && cc.lastValInfo.Bonded != cc.valInfo.Bonded &&
+		cc.lastValInfo.Moniker == cc.valInfo.Moniker {
+		inactive := "jailed"
+		alertID := fmt.Sprintf("ValidatorInactive_%s", cc.ValAddress)
+		if !cc.valInfo.Bonded && cc.lastValInfo.Bonded {
+			if cc.valInfo.Tombstoned {
+				inactive = "☠️ tombstoned 🪦"
+			}
+			td.alert(
+				cc.name,
+				fmt.Sprintf("%s is no longer active: validator %s is %s for chainid %s", cc.valInfo.Moniker, cc.ValAddress, inactive, cc.ChainId),
+				"critical",
+				false,
+				&alertID,
+			)
+			alert = true
+		} else if cc.valInfo.Bonded && !cc.lastValInfo.Bonded {
+			td.alert(
+				cc.name,
+				fmt.Sprintf("%s is no longer active: validator %s is %s for chainid %s", cc.valInfo.Moniker, cc.ValAddress, inactive, cc.ChainId),
+				"critical",
+				true,
+				&alertID,
+			)
+			resolved = true
+		}
+	}
+
+	cc.activeAlerts = alarms.getCount(cc.name)
+	return alert, resolved
+}
+
+func evaluateConsecutiveEmptyBlocksAlert(cc *ChainConfig) (bool, bool) {
+	alert, resolved := false, false
+
+	alertID := fmt.Sprintf("ConsecutiveEmptyBlocks_%s", cc.ValAddress)
+	if int(cc.statConsecutiveEmpty) >= intVal(cc.Alerts.ConsecutiveEmpty) {
+		if !alarms.exist(cc.name, alertID) {
+			td.alert(
+				cc.name,
+				fmt.Sprintf("%s has proposed %d consecutive empty blocks on %s", cc.valInfo.Moniker, intVal(cc.Alerts.ConsecutiveEmpty), cc.ChainId),
+				cc.Alerts.ConsecutiveEmptyPriority,
+				false,
+				&alertID,
+			)
+			alert = true
+		}
+	} else {
+		if alarms.exist(cc.name, alertID) {
+			td.alert(
+				cc.name,
+				fmt.Sprintf("%s has proposed %d consecutive empty blocks on %s", cc.valInfo.Moniker, intVal(cc.Alerts.ConsecutiveEmpty), cc.ChainId),
+				cc.Alerts.ConsecutiveEmptyPriority,
+				true,
+				&alertID,
+			)
+			resolved = true
+		}
+	}
+
+	cc.activeAlerts = alarms.getCount(cc.name)
+	return alert, resolved
+}
+
+func evaluatePercentageEmptyBlocksAlert(cc *ChainConfig) (bool, bool) {
+	alert, resolved := false, false
+
+	var emptyBlocksPercent float64
+	if cc.statTotalProps > 0 {
+		emptyBlocksPercent = 100 * float64(cc.statTotalPropsEmpty) / float64(cc.statTotalProps)
+	}
+
+	alertID := fmt.Sprintf("PercentageEmptyBlocks_%s", cc.ValAddress)
+	if emptyBlocksPercent >= float64(intVal(cc.Alerts.EmptyWindow)) {
+		if !alarms.exist(cc.name, alertID) {
+			td.alert(
+				cc.name,
+				fmt.Sprintf("%s has > %d%% empty blocks (%d of %d proposed blocks) on %s",
+					cc.valInfo.Moniker,
+					intVal(cc.Alerts.EmptyWindow),
+					int(cc.statTotalPropsEmpty),
+					int(cc.statTotalProps),
+					cc.ChainId),
+				cc.Alerts.EmptyPercentagePriority,
+				false,
+				&alertID,
+			)
+			alert = true
+		}
+	} else {
+		if alarms.exist(cc.name, alertID) {
+			td.alert(
+				cc.name,
+				fmt.Sprintf("%s has > %d%% empty blocks (%d of %d proposed blocks) on %s",
+					cc.valInfo.Moniker,
+					intVal(cc.Alerts.EmptyWindow),
+					int(cc.statTotalPropsEmpty),
+					int(cc.statTotalProps),
+					cc.ChainId),
+				cc.Alerts.EmptyPercentagePriority,
+				true,
+				&alertID,
+			)
+			resolved = true
+		}
+	}
+
+	cc.activeAlerts = alarms.getCount(cc.name)
+	return alert, resolved
+}
+
+func evaluateRPCNodeDownAlert(cc *ChainConfig) (bool, bool) {
+	alert, resolved := false, false
+
+	for _, node := range cc.Nodes {
+		alertID := fmt.Sprintf("RPCNodeDown_%s_%s", cc.ValAddress, node.Url)
+		if node.AlertIfDown && node.down && !node.wasDown && !node.downSince.IsZero() &&
+			time.Since(node.downSince) > time.Duration(td.NodeDownMin)*time.Minute {
+			if !alarms.exist(cc.name, alertID) {
+				td.alert(
+					cc.name,
+					fmt.Sprintf("Severity: %s\nRPC node %s has been down for > %d minutes on %s", td.NodeDownSeverity, node.Url, td.NodeDownMin, cc.ChainId),
+					td.NodeDownSeverity,
+					false,
+					&alertID,
+				)
+				alert = true
+			}
+		} else if node.AlertIfDown && !node.down && node.wasDown {
+			node.wasDown = false
+			if alarms.exist(cc.name, alertID) {
+				td.alert(
+					cc.name,
+					fmt.Sprintf("Severity: %s\nRPC node %s has been down for > %d minutes on %s", td.NodeDownSeverity, node.Url, td.NodeDownMin, cc.ChainId),
+					td.NodeDownSeverity,
+					true,
+					&alertID,
+				)
+				resolved = true
+			}
+		}
+	}
+
+	cc.activeAlerts = alarms.getCount(cc.name)
+	return alert, resolved
+}
+
+func evaluateStakeChangeAlert(cc *ChainConfig) (bool, bool) {
+	alert, resolved := false, false
+
+	if cc.valInfo != nil && cc.lastValInfo != nil {
+		stakeNow := cc.valInfo.DelegatedTokens
+		stakeBefore := cc.lastValInfo.DelegatedTokens
+		stakeChangePercent := (stakeNow - stakeBefore) / stakeBefore
+		trend := "increased"
+		threshold := floatVal(cc.Alerts.StakeChangeIncreaseThreshold)
+		if stakeChangePercent < 0 {
+			trend = "dropped"
+			threshold = floatVal(cc.Alerts.StakeChangeDropThreshold)
+		}
+		alertID := fmt.Sprintf("StakeChange_%s", cc.ValAddress)
+		severity := "warning"
+		unit := "base"
+		if cc.denomMetadata != nil && cc.Provider.Name != "namada" {
+			var stakeNowConverted, stakeBeforeConverted float64
+			var displayUnit string
+			var err0, err1 error
+			stakeNowConverted, _, err0 = utils.ConvertFloatInBaseUnitToDisplayUnit(stakeNow, *cc.denomMetadata)
+			stakeBeforeConverted, displayUnit, err1 = utils.ConvertFloatInBaseUnitToDisplayUnit(stakeBefore, *cc.denomMetadata)
+			if err0 == nil && err1 == nil {
+				stakeNow = stakeNowConverted
+				stakeBefore = stakeBeforeConverted
+				unit = displayUnit
+			}
+		} else if cc.Provider.Name == "namada" {
+			unit = "NAM"
+		}
+		message := fmt.Sprintf("%s's stake has %s by %.1g%% (%.1g %s now) compared to the previous check (%.1g %s)", cc.valInfo.Moniker, trend, math.Abs(stakeChangePercent)*100, stakeNow, unit, stakeBefore, unit)
+		if math.Abs(stakeChangePercent) >= threshold {
+			if !alarms.exist(cc.name, alertID) {
+				td.alert(cc.name, message, severity, false, &alertID)
+				alert = true
+			}
+		} else {
+			if alarms.exist(cc.name, alertID) {
+				td.alert(cc.name, message, severity, true, &alertID)
+				resolved = true
+			}
+		}
+		cc.activeAlerts = alarms.getCount(cc.name)
+	}
+
+	return alert, resolved
+}
+
+func evaluateUnclaimedRewardsAlert(cc *ChainConfig) (bool, bool) {
+	alert, resolved := false, false
+
+	selfRewardsLen := len(*cc.valInfo.SelfDelegationRewards)
+	commissionLen := len(*cc.valInfo.Commission)
+
+	if selfRewardsLen > 0 || commissionLen > 0 {
+		var denom string
+		var totalRewards github_com_cosmos_cosmos_sdk_types.DecCoin
+
+		if selfRewardsLen > 0 {
+			firstReward := (*cc.valInfo.SelfDelegationRewards)[0]
+			denom = firstReward.Denom
+			totalRewards = github_com_cosmos_cosmos_sdk_types.DecCoin{
+				Denom:  denom,
+				Amount: firstReward.Amount,
+			}
+
+			if commissionLen > 0 {
+				totalRewards = totalRewards.Add((*cc.valInfo.Commission)[0])
+			}
+		} else {
+			firstCommission := (*cc.valInfo.Commission)[0]
+			totalRewards = github_com_cosmos_cosmos_sdk_types.DecCoin{
+				Denom:  firstCommission.Denom,
+				Amount: firstCommission.Amount,
+			}
+		}
+
+		coinPrice, err := td.coinMarketCapClient.GetPrice(td.ctx, cc.Slug)
+		if err == nil {
+			totalRewardsConverted := totalRewards.Amount.MustFloat64() * coinPrice.Price
+			threshold := floatVal(cc.Alerts.UnclaimedRewardsThreshold)
+
+			alertID := fmt.Sprintf("UnclaimedRewards_%s", cc.ValAddress)
+			const severity = "warning"
+			if totalRewardsConverted > threshold {
+				if !alarms.exist(cc.name, alertID) {
+					message := fmt.Sprintf("%s has more than %.0f (%.0f currently) %s unclaimed rewards on %s",
+						cc.valInfo.Moniker, threshold, totalRewardsConverted, td.PriceConversion.Currency, cc.name)
+					td.alert(cc.name, message, severity, false, &alertID)
+					alert = true
+				}
+			} else {
+				if alarms.exist(cc.name, alertID) {
+					message := fmt.Sprintf("%s has more than %.0f %s unclaimed rewards on %s",
+						cc.valInfo.Moniker, threshold, td.PriceConversion.Currency, cc.name)
+					td.alert(cc.name, message, severity, true, &alertID)
+					resolved = true
+				}
+			}
+
+			cc.activeAlerts = alarms.getCount(cc.name)
+		}
+	}
+
+	return alert, resolved
+}
+
+func evaluateUnvotedGovernanceProposalAlert(cc *ChainConfig) (bool, bool) {
+	alert, resolved := false, false
+
+	idTemplate := "UnvotedGovernanceProposal_%s_%d"
+	msgTemplate := "[WARNING] There is an open proposal (#%v) that the validator has not voted on %s%s"
+
+	unvotedProposalMap := make(map[uint64]bool)
+	for _, proposal := range cc.unvotedOpenGovProposals {
+		unvotedProposalMap[proposal.ProposalId] = true
+	}
+
+	for _, proposal := range cc.unvotedOpenGovProposals {
+		alertID := fmt.Sprintf(idTemplate, cc.ValAddress, proposal.ProposalId)
+		deadline := fmt.Sprintf(", deadline: %s UTC", proposal.VotingEndTime.Format("2006-01-02 15:04"))
+		if cc.Provider.Name == "namada" {
+			deadline = ""
+		}
+		alertMsg := fmt.Sprintf(msgTemplate, proposal.ProposalId, cc.name, deadline)
+
+		if !alarms.exist(cc.name, alertID) {
+			td.alert(
+				cc.name,
+				alertMsg,
+				"warning",
+				false,
+				&alertID,
+			)
+			alert = true
+		}
+	}
+
+	messagesToBeResolved := make(map[uint64]string)
+
+	alarms.notifyMux.RLock()
+
+	if alarms.AllAlarms[cc.name] != nil {
+		for alertID := range alarms.AllAlarms[cc.name] {
+			if strings.HasPrefix(alertID, "UnvotedGovernanceProposal") {
+				parts := strings.Split(alertID, "_")
+				if proposalID, err := strconv.ParseUint(parts[len(parts)-1], 10, 64); err == nil {
+					if !unvotedProposalMap[proposalID] {
+						messagesToBeResolved[proposalID] = alertID
+					}
+				}
+			}
+		}
+	}
+
+	alarms.notifyMux.RUnlock()
+
+	for _, alertID := range messagesToBeResolved {
+		if alarms.exist(cc.name, alertID) {
+			alertIDCopy := alertID // Create local copy to avoid implicit memory aliasing
+			td.alert(
+				cc.name,
+				alarms.AllAlarms[cc.name][alertID].Message,
+				"warning",
+				true,
+				&alertIDCopy,
+			)
+			resolved = true
+		}
+	}
+
+	cc.activeAlerts = alarms.getCount(cc.name)
+	return alert, resolved
 }
 
 // watch handles monitoring for missed blocks, stalled chain, node downtime
 // and also updates a few prometheus stats
 // FIXME: not watching for nodes that are lagging the head block!
 func (cc *ChainConfig) watch() {
-	var missedAlarm, pctAlarm, noNodes, emptyBlocksAlarm, emptyPctAlarm, stakeChangeAlarm, unclaimedRewardsAlarm bool
-	inactive := "jailed"
-	nodeAlarms := make(map[string]bool)
-
 	// wait until we have a moniker:
-	noNodesSec := 0 // delay a no-nodes alarm for 30 seconds, too noisy.
+	noNodesSec := 0
 	for {
 		if cc.valInfo == nil || cc.valInfo.Moniker == "not connected" {
 			time.Sleep(time.Second)
-			if boolVal(cc.Alerts.AlertIfNoServers) && !noNodes && cc.noNodes && noNodesSec >= 60*td.NodeDownMin {
-				noNodes = true
-				td.alert(
-					cc.name,
-					fmt.Sprintf("no RPC endpoints are working for %s", cc.ChainId),
-					"critical",
-					false,
-					&cc.valInfo.Valcons,
-				)
+			if boolVal(cc.Alerts.AlertIfNoServers) && cc.noNodes && noNodesSec >= 60*td.NodeDownMin {
+				alertID := fmt.Sprintf("NoRPCEndpoints_%s", cc.ValAddress)
+				if !alarms.exist(cc.name, alertID) {
+					td.alert(
+						cc.name,
+						fmt.Sprintf("no RPC endpoints are working for %s", cc.ChainId),
+						"critical",
+						false,
+						&alertID,
+					)
+				}
 			}
 			noNodesSec += 1
 			continue
@@ -451,6 +941,7 @@ func (cc *ChainConfig) watch() {
 		noNodesSec = 0
 		break
 	}
+
 	// initial stat creation for nodes, we only update again if the node is positive
 	if td.Prom {
 		for _, node := range cc.Nodes {
@@ -462,399 +953,57 @@ func (cc *ChainConfig) watch() {
 		time.Sleep(2 * time.Second)
 
 		// alert if we can't monitor
-		switch {
-		case boolVal(cc.Alerts.AlertIfNoServers) && !noNodes && cc.noNodes:
-			noNodesSec += 2
-			if noNodesSec <= 30*td.NodeDownMin {
-				if noNodesSec%20 == 0 {
-					l(fmt.Sprintf("no nodes available on %s for %d seconds, deferring alarm", cc.ChainId, noNodesSec))
-				}
-				noNodes = false
-			} else {
-				noNodesSec = 0
-				noNodes = true
-				td.alert(
-					cc.name,
-					fmt.Sprintf("no RPC endpoints are working for %s", cc.ChainId),
-					"critical",
-					false,
-					&cc.valInfo.Valcons,
-				)
-			}
-		case boolVal(cc.Alerts.AlertIfNoServers) && noNodes && !cc.noNodes:
-			noNodes = false
-			td.alert(
-				cc.name,
-				fmt.Sprintf("no RPC endpoints are working for %s", cc.ChainId),
-				"critical",
-				true,
-				&cc.valInfo.Valcons,
-			)
-		default:
-			noNodesSec = 0
+		if boolVal(cc.Alerts.AlertIfNoServers) {
+			evaluateNoRPCEndpointsAlert(cc, &noNodesSec)
 		}
 
 		// stalled chain detection
-		if boolVal(cc.Alerts.StalledAlerts) && !cc.lastBlockTime.IsZero() {
-			if !cc.lastBlockAlarm && cc.lastBlockTime.Before(time.Now().Add(time.Duration(-intVal(cc.Alerts.Stalled))*time.Minute)) {
-				// chain is stalled send an alert!
-				cc.lastBlockAlarm = true
-				td.alert(
-					cc.name,
-					fmt.Sprintf("stalled: have not seen a new block on %s in %d minutes", cc.ChainId, intVal(cc.Alerts.Stalled)),
-					"critical",
-					false,
-					&cc.valInfo.Valcons,
-				)
-			} else if !cc.lastBlockTime.Before(time.Now().Add(time.Duration(-intVal(cc.Alerts.Stalled)) * time.Minute)) {
-				alarms.clearNoBlocks(cc)
-				cc.lastBlockAlarm = false
-				cc.activeAlerts = alarms.getCount(cc.name)
-			}
+		if boolVal(cc.Alerts.StalledAlerts) {
+			evaluateChainStalledAlert(cc)
 		}
 
 		// jailed detection - only alert if it changes.
-		if boolVal(cc.Alerts.AlertIfInactive) && cc.lastValInfo != nil && cc.lastValInfo.Bonded != cc.valInfo.Bonded &&
-			cc.lastValInfo.Moniker == cc.valInfo.Moniker {
-
-			id := cc.valInfo.Valcons + "jailed"
-			// just went inactive, figure out if it's jail or tombstone
-			if !cc.valInfo.Bonded && cc.lastValInfo.Bonded {
-				if cc.valInfo.Tombstoned {
-					// don't worry about changing it back ... lol.
-					inactive = "☠️ tombstoned 🪦"
-				}
-				td.alert(
-					cc.name,
-					fmt.Sprintf("%s is no longer active: validator %s is %s for chainid %s", cc.valInfo.Moniker, cc.ValAddress, inactive, cc.ChainId),
-					"critical",
-					false,
-					&id,
-				)
-			} else if cc.valInfo.Bonded && !cc.lastValInfo.Bonded {
-				td.alert(
-					cc.name,
-					fmt.Sprintf("%s is no longer active: validator %s is %s for chainid %s", cc.valInfo.Moniker, cc.ValAddress, inactive, cc.ChainId),
-					"critical",
-					true,
-					&id,
-				)
-			}
+		if boolVal(cc.Alerts.AlertIfInactive) {
+			evaluateValidatorInactiveAlert(cc)
 		}
 
 		// consecutive missed block alarms:
-		if !missedAlarm && boolVal(cc.Alerts.ConsecutiveAlerts) && int(cc.statConsecutiveMiss) >= intVal(cc.Alerts.ConsecutiveMissed) {
-			// alert on missed block counter!
-			missedAlarm = true
-			id := cc.valInfo.Valcons + "consecutive"
-			td.alert(
-				cc.name,
-				fmt.Sprintf("%s has missed %d blocks on %s", cc.valInfo.Moniker, intVal(cc.Alerts.ConsecutiveMissed), cc.ChainId),
-				cc.Alerts.ConsecutivePriority,
-				false,
-				&id,
-			)
-			cc.activeAlerts = alarms.getCount(cc.name)
-		} else if missedAlarm && int(cc.statConsecutiveMiss) < intVal(cc.Alerts.ConsecutiveMissed) {
-			// clear the alert
-			missedAlarm = false
-			id := cc.valInfo.Valcons + "consecutive"
-			td.alert(
-				cc.name,
-				fmt.Sprintf("%s has missed %d blocks on %s", cc.valInfo.Moniker, intVal(cc.Alerts.ConsecutiveMissed), cc.ChainId),
-				cc.Alerts.ConsecutivePriority,
-				true,
-				&id,
-			)
-			cc.activeAlerts = alarms.getCount(cc.name)
+		if boolVal(cc.Alerts.ConsecutiveAlerts) {
+			evaluateConsecutiveBlocksMissedAlert(cc)
 		}
 
 		// window percentage missed block alarms
-		if boolVal(cc.Alerts.PercentageAlerts) && !pctAlarm && 100*float64(cc.valInfo.Missed)/float64(cc.valInfo.Window) > float64(intVal(cc.Alerts.Window)) {
-			// alert on missed block counter!
-			pctAlarm = true
-			id := cc.valInfo.Valcons + "percent"
-			td.alert(
-				cc.name,
-				fmt.Sprintf("%s has missed > %d%% of the slashing window's blocks on %s", cc.valInfo.Moniker, intVal(cc.Alerts.Window), cc.ChainId),
-				cc.Alerts.PercentagePriority,
-				false,
-				&id,
-			)
-			cc.activeAlerts = alarms.getCount(cc.name)
-		} else if boolVal(cc.Alerts.PercentageAlerts) && pctAlarm && 100*float64(cc.valInfo.Missed)/float64(cc.valInfo.Window) < float64(intVal(cc.Alerts.Window)) {
-			// clear the alert
-			pctAlarm = false
-			id := cc.valInfo.Valcons + "percent"
-			td.alert(
-				cc.name,
-				fmt.Sprintf("%s has missed > %d%% of the slashing window's blocks on %s", cc.valInfo.Moniker, intVal(cc.Alerts.Window), cc.ChainId),
-				cc.Alerts.PercentagePriority,
-				true,
-				&id,
-			)
-			cc.activeAlerts = alarms.getCount(cc.name)
+		if boolVal(cc.Alerts.PercentageAlerts) {
+			evaluatePercentageBlocksMissedAlert(cc)
 		}
 
 		// empty blocks alarm handling
-		if !emptyBlocksAlarm && boolVal(cc.Alerts.ConsecutiveEmptyAlerts) && int(cc.statConsecutiveEmpty) >= intVal(cc.Alerts.ConsecutiveEmpty) {
-			// alert on empty blocks counter!
-			emptyBlocksAlarm = true
-			id := cc.valInfo.Valcons + "empty"
-			td.alert(
-				cc.name,
-				fmt.Sprintf("%s has proposed %d consecutive empty blocks on %s", cc.valInfo.Moniker, intVal(cc.Alerts.ConsecutiveEmpty), cc.ChainId),
-				cc.Alerts.ConsecutiveEmptyPriority,
-				false,
-				&id,
-			)
-			cc.activeAlerts = alarms.getCount(cc.name)
-		} else if emptyBlocksAlarm && int(cc.statConsecutiveEmpty) < intVal(cc.Alerts.ConsecutiveEmpty) {
-			// clear the alert
-			emptyBlocksAlarm = false
-			id := cc.valInfo.Valcons + "empty"
-			td.alert(
-				cc.name,
-				fmt.Sprintf("%s has proposed %d consecutive empty blocks on %s", cc.valInfo.Moniker, intVal(cc.Alerts.ConsecutiveEmpty), cc.ChainId),
-				cc.Alerts.ConsecutiveEmptyPriority,
-				true,
-				&id,
-			)
-			cc.activeAlerts = alarms.getCount(cc.name)
+		if boolVal(cc.Alerts.ConsecutiveEmptyAlerts) {
+			evaluateConsecutiveEmptyBlocksAlert(cc)
 		}
 
 		// window percentage empty block alarms
-		var emptyBlocksPercent float64
-		if cc.statTotalProps > 0 {
-			emptyBlocksPercent = 100 * float64(cc.statTotalPropsEmpty) / float64(cc.statTotalProps)
-		}
-
-		if boolVal(cc.Alerts.EmptyPercentageAlerts) && !emptyPctAlarm && emptyBlocksPercent > float64(intVal(cc.Alerts.EmptyWindow)) {
-			// alert on empty block percentage!
-			emptyPctAlarm = true
-			id := cc.valInfo.Valcons + "empty_percent"
-			td.alert(
-				cc.name,
-				fmt.Sprintf("%s has > %d%% empty blocks (%d of %d proposed blocks) on %s",
-					cc.valInfo.Moniker,
-					intVal(cc.Alerts.EmptyWindow),
-					int(cc.statTotalPropsEmpty),
-					int(cc.statTotalProps),
-					cc.ChainId),
-				cc.Alerts.EmptyPercentagePriority,
-				false,
-				&id,
-			)
-			cc.activeAlerts = alarms.getCount(cc.name)
-		} else if boolVal(cc.Alerts.EmptyPercentageAlerts) && emptyPctAlarm && emptyBlocksPercent < float64(intVal(cc.Alerts.EmptyWindow)) {
-			// clear the alert
-			emptyPctAlarm = false
-			id := cc.valInfo.Valcons + "empty_percent"
-			td.alert(
-				cc.name,
-				fmt.Sprintf("%s has > %d%% empty blocks (%d of %d proposed blocks) on %s",
-					cc.valInfo.Moniker,
-					intVal(cc.Alerts.EmptyWindow),
-					int(cc.statTotalPropsEmpty),
-					int(cc.statTotalProps),
-					cc.ChainId),
-				cc.Alerts.EmptyPercentagePriority,
-				true,
-				&id,
-			)
-			cc.activeAlerts = alarms.getCount(cc.name)
+		if boolVal(cc.Alerts.EmptyPercentageAlerts) {
+			evaluatePercentageEmptyBlocksAlert(cc)
 		}
 
 		// node down alarms
-		for _, node := range cc.Nodes {
-			// window percentage missed block alarms
-			if node.AlertIfDown && node.down && !node.wasDown && !node.downSince.IsZero() &&
-				time.Since(node.downSince) > time.Duration(td.NodeDownMin)*time.Minute {
-				// alert on dead node
-				if !nodeAlarms[node.Url] {
-					cc.activeAlerts = alarms.getCount(cc.name)
-				} else {
-					continue
-				}
-				nodeAlarms[node.Url] = true // used to keep active alert count correct
-				td.alert(
-					cc.name,
-					fmt.Sprintf("Severity: %s\nRPC node %s has been down for > %d minutes on %s", td.NodeDownSeverity, node.Url, td.NodeDownMin, cc.ChainId),
-					td.NodeDownSeverity,
-					false,
-					&node.Url,
-				)
-			} else if node.AlertIfDown && !node.down && node.wasDown {
-				// clear the alert
-				nodeAlarms[node.Url] = false
-				node.wasDown = false
-				td.alert(
-					cc.name,
-					fmt.Sprintf("Severity: %s\nRPC node %s has been down for > %d minutes on %s", td.NodeDownSeverity, node.Url, td.NodeDownMin, cc.ChainId),
-					td.NodeDownSeverity,
-					true,
-					&node.Url,
-				)
-				cc.activeAlerts = alarms.getCount(cc.name)
-			}
-		}
+		evaluateRPCNodeDownAlert(cc)
 
 		// validator stake change alerts
-		if boolVal(cc.Alerts.StakeChangeAlerts) && cc.valInfo != nil && cc.lastValInfo != nil {
-			stakeChangePercent := (cc.valInfo.DelegatedTokens - cc.lastValInfo.DelegatedTokens) / cc.lastValInfo.DelegatedTokens
-			trend := "increased"
-			threshold := floatVal(cc.Alerts.StakeChangeIncreaseThreshold)
-			if stakeChangePercent < 0 {
-				trend = "dropped"
-				threshold = floatVal(cc.Alerts.StakeChangeDropThreshold)
-			}
-			id := cc.valInfo.Valcons + "_stake_change"
-			severity := "warning"
-			message := fmt.Sprintf("%s's stake has %s more than %.1g%% compared to the previous check", cc.valInfo.Moniker, trend, threshold*100)
-			if math.Abs(stakeChangePercent) >= threshold {
-				td.alert(cc.name, message, severity, false, &id)
-				stakeChangeAlarm = true
-			} else {
-				if stakeChangeAlarm {
-					td.alert(cc.name, message, severity, true, &id)
-					stakeChangeAlarm = false
-
-				}
-			}
+		if boolVal(cc.Alerts.StakeChangeAlerts) {
+			evaluateStakeChangeAlert(cc)
 		}
 
 		// validator unclaimed rewards alert
-		// based on our observations, SelfDelegationRewards and Commission always use the base unit, or use the same unit
-		// might be buggy for some chains
 		if boolVal(cc.Alerts.UnclaimedRewardsAlerts) && td.PriceConversion.Enabled && cc.valInfo.SelfDelegationRewards != nil && cc.valInfo.Commission != nil {
-			selfRewardsLen := len(*cc.valInfo.SelfDelegationRewards)
-			commissionLen := len(*cc.valInfo.Commission)
-
-			if selfRewardsLen > 0 || commissionLen > 0 {
-				var denom string
-				var totalRewards github_com_cosmos_cosmos_sdk_types.DecCoin
-
-				// Initialize totalRewards based on available data
-				if selfRewardsLen > 0 {
-					firstReward := (*cc.valInfo.SelfDelegationRewards)[0]
-					denom = firstReward.Denom
-					totalRewards = github_com_cosmos_cosmos_sdk_types.DecCoin{
-						Denom:  denom,
-						Amount: firstReward.Amount, // Start with the first reward instead of zero
-					}
-
-					// Add commission if available and same denom
-					if commissionLen > 0 {
-						totalRewards = totalRewards.Add((*cc.valInfo.Commission)[0])
-					}
-				} else {
-					// Only commission available
-					firstCommission := (*cc.valInfo.Commission)[0]
-					totalRewards = github_com_cosmos_cosmos_sdk_types.DecCoin{
-						Denom:  firstCommission.Denom,
-						Amount: firstCommission.Amount,
-					}
-				}
-
-				// Get price only once we know we have rewards to check
-				coinPrice, err := td.coinMarketCapClient.GetPrice(td.ctx, cc.Slug)
-				if err == nil {
-					totalRewardsConverted := totalRewards.Amount.MustFloat64() * coinPrice.Price
-					threshold := floatVal(cc.Alerts.UnclaimedRewardsThreshold)
-
-					// Pre-compute alert components
-					id := cc.valInfo.Valcons + "_unclaimed_rewards"
-					const severity = "warning"
-					message := fmt.Sprintf("%s has more than %.0f %s unclaimed rewards on %s",
-						cc.valInfo.Moniker, threshold, td.PriceConversion.Currency, cc.name)
-
-					if totalRewardsConverted > threshold {
-						if !unclaimedRewardsAlarm { // Only alert if not already alarmed
-							td.alert(cc.name, message, severity, false, &id)
-							unclaimedRewardsAlarm = true
-						}
-					} else if unclaimedRewardsAlarm {
-						td.alert(cc.name, message, severity, true, &id)
-						unclaimedRewardsAlarm = false
-					}
-
-					cc.activeAlerts = alarms.getCount(cc.name)
-				}
-			}
+			evaluateUnclaimedRewardsAlert(cc)
 		}
 
 		// there are open proposals that the validator has not voted on
-		idTemplate := "%s_gov_voting_%d"
-		msgTemplate := "[WARNING] There is an open proposal (#%v) that the validator has not voted on %s%s"
-
-		// Create a map for faster lookups of unvoted proposal IDs
-		unvotedProposalMap := make(map[uint64]bool)
-		for _, proposal := range cc.unvotedOpenGovProposals {
-			unvotedProposalMap[proposal.ProposalId] = true
-		}
-
-		// Only send governance alerts if they're enabled
 		if boolVal(cc.Alerts.GovernanceAlerts) {
-			for _, proposal := range cc.unvotedOpenGovProposals {
-				id := fmt.Sprintf(idTemplate, cc.valInfo.Valcons, proposal.ProposalId)
-				deadline := fmt.Sprintf(", deadline: %s UTC", proposal.VotingEndTime.Format("2006-01-02 15:04"))
-				if cc.Provider.Name == "namada" {
-					// for Namada the voting end time might be calculated by the endEpoch so it is not super accurate
-					// currently Tenderduty considers alerts with different messages as different alerts so we have to disable this feature for Namada
-					deadline = ""
-				}
-				alertMsg := fmt.Sprintf(msgTemplate, proposal.ProposalId, cc.name, deadline)
-
-				// Send alert for this specific proposal
-				td.alert(
-					cc.name,
-					alertMsg,
-					"warning",
-					false,
-					&id,
-				)
-			}
+			evaluateUnvotedGovernanceProposalAlert(cc)
 		}
-
-		// check and resolve the alert if the proposal has been voted on
-		// compile the regex to extract proposal IDs - match any digits after "proposal (#"
-		proposalRegex := regexp.MustCompile(`proposal \(#(\d+)\)`)
-		messagesToBeResolved := make(map[uint64]string)
-
-		// Use RLock to safely read the alerts map
-		alarms.notifyMux.RLock()
-
-		// First find all proposal alerts that need to be cleared
-		if alarms.AllAlarms[cc.name] != nil {
-			for alertMsg := range alarms.AllAlarms[cc.name] {
-				// Use regex to find and extract the proposal ID
-				matches := proposalRegex.FindStringSubmatch(alertMsg)
-				if len(matches) >= 2 {
-					// matches[0] is the full match, matches[1] is the captured group (the ID)
-					if proposalID, err := strconv.ParseUint(matches[1], 10, 64); err == nil {
-						// If this proposal ID is no longer in our unvoted list, we should clear it
-						if !unvotedProposalMap[proposalID] {
-							messagesToBeResolved[proposalID] = alertMsg
-						}
-					}
-				}
-			}
-		}
-
-		alarms.notifyMux.RUnlock()
-		for proposalID, alertMsg := range messagesToBeResolved {
-			id := fmt.Sprintf(idTemplate, cc.valInfo.Valcons, proposalID)
-
-			td.alert(
-				cc.name,
-				alertMsg,
-				"warning",
-				true,
-				&id,
-			)
-		}
-
-		cc.activeAlerts = alarms.getCount(cc.name)
 
 		if td.Prom {
 			// raw block timer, ignoring finalized state
