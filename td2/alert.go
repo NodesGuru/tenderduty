@@ -898,12 +898,13 @@ func evaluateUnvotedGovernanceProposalAlert(cc *ChainConfig) (bool, bool) {
 
 	for _, alertID := range messagesToBeResolved {
 		if alarms.exist(cc.name, alertID) {
+			alertIDCopy := alertID // Create local copy to avoid implicit memory aliasing
 			td.alert(
 				cc.name,
 				alarms.AllAlarms[cc.name][alertID].Message,
 				"warning",
 				true,
-				&alertID,
+				&alertIDCopy,
 			)
 			resolved = true
 		}
