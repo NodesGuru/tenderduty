@@ -158,7 +158,9 @@ func (c *CoinMarketCapClient) fetchPricesFromAPI(ctx context.Context, slugs []st
 
 		// Always close the response body
 		defer func(slug string, body io.ReadCloser) {
-			body.Close()
+			if err := body.Close(); err != nil {
+				fmt.Printf("Error closing response body for slug %s: %v\n", slug, err)
+			}
 		}(slug, resp.Body)
 
 		// If status is not OK, skip this slug
@@ -307,4 +309,47 @@ func ConvertDecCoinToDisplayUnit(coins []github_com_cosmos_cosmos_sdk_types.DecC
 	}
 
 	return &convertedCoins, nil
+}
+
+// ConvertFloatInBaseUnitToDisplayUnit converts a float64 to the display unit based on DenomMetadata.
+// return converted value, unit, and error if any
+func ConvertFloatInBaseUnitToDisplayUnit(value float64, metadata bank.Metadata) (float64, string, error) {
+	// Find the display denomination unit
+	var displayDenom string
+	var displayExponent uint32
+	var convertedValue float64
+
+	// If no display is set, default to base
+	if metadata.Display == "" {
+		displayDenom = metadata.Base
+		// If display is base, no conversion needed
+		return value, displayDenom, nil
+	} else {
+		displayDenom = metadata.Display
+	}
+
+	// Find the exponent for the display denom
+	foundDisplayDenom := false
+	for _, unit := range metadata.DenomUnits {
+		if unit.Denom == displayDenom {
+			displayExponent = unit.Exponent
+			foundDisplayDenom = true
+			break
+		}
+	}
+
+	if !foundDisplayDenom {
+		return 0, "", fmt.Errorf("display unit '%s' not found in denomination units for: %s", displayDenom, metadata.Base)
+	}
+
+	// Convert from base unit to display unit
+	// Since we're going from base (smaller unit) to display (larger unit),
+	// we need to divide by 10^(display_exp - base_exp)
+	divisor := 1.0
+	for i := uint32(0); i < displayExponent; i++ {
+		divisor *= 10.0
+	}
+	convertedValue = value / divisor
+
+	return convertedValue, displayDenom, nil
 }
