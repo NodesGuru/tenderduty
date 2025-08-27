@@ -121,7 +121,7 @@ func (d *DefaultProvider) CheckIfValidatorVoted(ctx context.Context, proposalID 
 	// If we've tried all nodes and found no votes, return false
 	// If there were errors, return the last one
 	if lastErr != nil {
-		return false, fmt.Errorf("failed to check validator vote across all nodes: %w", lastErr)
+		return false, fmt.Errorf("did not find validator vote transaction across all nodes, last error in a response: %w", lastErr)
 	}
 
 	return false, nil
@@ -158,7 +158,7 @@ func (d *DefaultProvider) QueryUnvotedOpenProposals(ctx context.Context) ([]gov.
 						l(fmt.Sprintf("⚠️ Error checking if validator voted: %v", err))
 					}
 
-					if err == nil && !hasVoted {
+					if !hasVoted {
 						unvotedProposals = append(unvotedProposals, proposal)
 					}
 				}
